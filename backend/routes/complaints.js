@@ -1,14 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { getFirestore, FieldValue } = require('../config/firebase');
+const localStorage = require('../storage/localStorage');
 const jwt = require('jsonwebtoken');
 
-// Middleware to verify token
+// Middleware to verify token (optional - allow unauthenticated)
 const verifyToken = (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   
   if (!token) {
-    return res.status(401).json({ success: false, message: 'Authentication required' });
+    // Allow unauthenticated requests
+    req.userId = null;
+    return next();
   }
 
   try {
@@ -16,44 +18,57 @@ const verifyToken = (req, res, next) => {
     req.userId = decoded.userId;
     next();
   } catch (error) {
-    res.status(401).json({ success: false, message: 'Invalid token' });
+    // Allow requests even with invalid token
+    req.userId = null;
+    next();
   }
 };
 
 // Submit Complaint
 router.post('/submit', verifyToken, async (req, res) => {
   try {
-    const { category, description, attachments, userName } = req.body;
+    const { category, description, attachments, userName, deviceId } = req.body;
+
+    console.log('📥 Received complaint submission:', { category, deviceId, hasToken: !!req.userId });
 
     if (!category || !description) {
       return res.status(400).json({ success: false, message: 'Category and description are required' });
     }
 
-    const db = getFirestore();
-    const complaintsRef = db.collection('complaints');
-
+    // Generate a temporary userId if not authenticated
+    // Use deviceId from client if provided, otherwise generate one
+    const userId = req.userId || deviceId || `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    console.log('👤 Using userId:', userId);
+    
+    const timestamp = new Date().toISOString();
+    
     const complaintData = {
-      userId: req.userId,
+      userId: userId,
       userName: userName || 'User',
       category,
       description,
       attachments: attachments || [],
       status: 'Pending',
-      createdAt: FieldValue ? FieldValue.serverTimestamp() : new Date(),
-      updatedAt: FieldValue ? FieldValue.serverTimestamp() : new Date(),
+      createdAt: timestamp,
+      updatedAt: timestamp,
     };
 
-    const docRef = await complaintsRef.add(complaintData);
+    // Save to local storage
+    const result = await localStorage.addComplaint(complaintData);
+    const docId = result._id;
+    console.log('✅ Complaint saved to local storage, userId:', userId, 'docId:', docId);
 
     res.json({
       success: true,
       message: 'Complaint submitted successfully',
       complaint: {
-        id: docRef.id,
+        id: docId,
+        userId: userId, // Return userId so client can store it
         category: complaintData.category,
         description: complaintData.description,
         status: complaintData.status,
-        createdAt: new Date().toISOString(),
+        createdAt: timestamp,
       },
     });
   } catch (error) {
@@ -65,23 +80,25 @@ router.post('/submit', verifyToken, async (req, res) => {
 // Get User Complaints
 router.get('/my-complaints', verifyToken, async (req, res) => {
   try {
-    const db = getFirestore();
-    const complaintsRef = db.collection('complaints');
+    // Get userId from token or query parameter (for unauthenticated users)
+    const userId = req.userId || req.query.deviceId;
     
-    const snapshot = await complaintsRef
-      .where('userId', '==', req.userId)
-      .orderBy('createdAt', 'desc')
-      .get();
-
-    const complaints = [];
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      complaints.push({
-        _id: doc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+    if (!userId) {
+      return res.json({
+        success: true,
+        complaints: [],
       });
+    }
+
+    // Get from local storage
+    const complaints = await localStorage.getComplaints(userId);
+    console.log(`✅ Fetched ${complaints.length} complaints for userId: ${userId}`);
+
+    // Sort by createdAt descending
+    complaints.sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return dateB - dateA;
     });
 
     res.json({
@@ -97,22 +114,7 @@ router.get('/my-complaints', verifyToken, async (req, res) => {
 // Get All Complaints (Admin)
 router.get('/all', verifyToken, async (req, res) => {
   try {
-    const db = getFirestore();
-    const complaintsRef = db.collection('complaints');
-    
-    const snapshot = await complaintsRef
-      .orderBy('createdAt', 'desc')
-      .get();
-
-    const complaints = [];
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      complaints.push({
-        _id: doc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      });
-    });
+    const complaints = await localStorage.getComplaints(null); // Get all complaints
 
     res.json({
       success: true,
@@ -128,38 +130,25 @@ router.get('/all', verifyToken, async (req, res) => {
 router.put('/:id/status', verifyToken, async (req, res) => {
   try {
     const { status, remarks } = req.body;
+    const userId = req.userId || req.query.deviceId;
+    
+    const complaints = await localStorage.getComplaints(userId);
+    const complaint = complaints.find(comp => comp._id === req.params.id);
 
-    const db = getFirestore();
-    const complaintRef = db.collection('complaints').doc(req.params.id);
-    const doc = await complaintRef.get();
-
-    if (!doc.exists) {
+    if (!complaint) {
       return res.status(404).json({ success: false, message: 'Complaint not found' });
     }
 
-    const updateData = {
-      status,
-      updatedAt: FieldValue ? FieldValue.serverTimestamp() : new Date(),
-    };
-
+    complaint.status = status;
+    complaint.updatedAt = new Date().toISOString();
     if (remarks) {
-      updateData.remarks = remarks;
+      complaint.remarks = remarks;
     }
-
-    await complaintRef.update(updateData);
-
-    const updatedDoc = await complaintRef.get();
-    const data = updatedDoc.data();
 
     res.json({
       success: true,
       message: 'Complaint status updated',
-      complaint: {
-        _id: updatedDoc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      },
+      complaint,
     });
   } catch (error) {
     console.error('Update complaint error:', error);

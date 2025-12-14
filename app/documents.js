@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView, TextInput, Modal, Alert, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import BottomNav from './components/BottomNav';
+import React, { useEffect, useState } from 'react';
+import { Alert, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from './components/AppHeader';
+import BottomNav from './components/BottomNav';
 
 const DocumentItem = ({ fileName, timestamp, onPress }) => (
   <TouchableOpacity style={styles.documentItem} onPress={onPress}>

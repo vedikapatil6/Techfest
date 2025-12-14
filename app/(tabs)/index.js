@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, StatusBar } from 'react-native';
-import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import BottomNav from '../components/BottomNav';
 
-const MenuButton = ({ icon, title, onPress }) => (
-  <TouchableOpacity onPress={onPress} style={styles.menuButton}>
+const MenuCard = ({ icon, title, onPress }) => (
+  <TouchableOpacity onPress={onPress} style={styles.menuCard}>
     <View style={styles.iconContainer}>
       <Text style={styles.iconText}>{icon}</Text>
     </View>
@@ -40,10 +40,11 @@ export default function HomeScreen() {
   const menuItems = [
     { id: 1, icon: '🎯', title: 'My Schemes', route: '/schemes' },
     { id: 2, icon: '📁', title: 'My Documents', route: '/documents' },
-    { id: 3, icon: '🤖', title: 'Chatbot', route: '/chatbot' },
+    { id: 3, icon: '🤖', title: 'AI Chatbot', route: '/chatbot' },
     { id: 4, icon: '📢', title: 'Complaints', route: '/complaints' },
-    { id: 5, icon: '📰', title: 'News & Local Updates', route: '/news' },
-    { id: 6, icon: '📞', title: 'Call on Helpline', route: '/helpline' },
+    { id: 5, icon: '📰', title: 'News & Updates', route: '/news' },
+    { id: 6, icon: '📞', title: 'Helpline', route: '/helpline' },
+    { id: 7, icon: '📋', title: 'Check Status', route: '/check-status' },
   ];
 
   return (
@@ -52,15 +53,7 @@ export default function HomeScreen() {
       
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>🏛️</Text>
-          </View>
-          <View>
-            <Text style={styles.appName}>Niti Nidhi</Text>
-            <Text style={styles.greeting}>hello, {userName}</Text>
-          </View>
-        </View>
+        <Text style={styles.greeting}>hello, {userName}</Text>
         <View style={styles.headerIcons}>
           <TouchableOpacity style={styles.headerIcon}>
             <Text style={styles.headerIconText}>💬</Text>
@@ -104,7 +97,7 @@ export default function HomeScreen() {
         {/* Menu Items */}
         <View style={styles.menuContainer}>
           {menuItems.map((item) => (
-            <MenuButton
+            <MenuCard
               key={item.id}
               icon={item.icon}
               title={item.title}
@@ -116,7 +109,6 @@ export default function HomeScreen() {
         <View style={styles.bottomSpacing} />
       </ScrollView>
 
-      {/* Bottom Navigation */}
       <BottomNav />
     </View>
   );
@@ -135,35 +127,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  logo: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#E0E7FF',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  logoText: {
-    fontSize: 24,
-  },
-  appName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 2,
   },
   greeting: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
   },
   headerIcons: {
     flexDirection: 'row',
@@ -271,7 +239,7 @@ const styles = StyleSheet.create({
   menuContainer: {
     marginBottom: 24,
   },
-  menuButton: {
+  menuCard: {
     backgroundColor: '#EFF6FF',
     borderRadius: 16,
     padding: 16,

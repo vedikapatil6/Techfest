@@ -75,7 +75,7 @@ export default function SchemesByCategoryScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       
       {/* Header */}
       <AppHeader title={`${categoryName} Schemes`} />

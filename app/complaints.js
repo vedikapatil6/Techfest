@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView, TextInput, Alert, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { auth, db } from './config/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import BottomNav from './components/BottomNav';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Alert, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from './components/AppHeader';
+import BottomNav from './components/BottomNav';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -101,40 +99,34 @@ export default function ComplaintsScreen() {
       const profile = profileData ? JSON.parse(profileData) : {};
       const userName = profile.fullName || 'User';
 
-      // Save to Firebase Firestore first
-      try {
-        if (auth.currentUser) {
-          await addDoc(collection(db, 'complaints'), {
-            userId: auth.currentUser.uid,
-            userName,
-            category: selectedCategory,
-            description: description.trim(),
-            attachments: attachments,
-            status: 'Pending',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-          console.log('✅ Complaint saved to Firestore');
-        }
-      } catch (firebaseError) {
-        console.log('Firebase save error:', firebaseError);
+      // Get or create device ID for tracking
+      let deviceId = await AsyncStorage.getItem('@device_id');
+      if (!deviceId) {
+        deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await AsyncStorage.setItem('@device_id', deviceId);
       }
+      
+      console.log('📱 Submitting complaint with deviceId:', deviceId);
 
-      if (!token) {
-        throw new Error('Not authenticated. Please login again.');
+      // Authentication is optional - allow submission without token
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add token if available, but don't require it
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
 
       const response = await fetch(`${API_URL}/complaints/submit`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         body: JSON.stringify({
           category: selectedCategory,
           description: description.trim(),
           attachments: attachments,
           userName,
+          deviceId, // Include deviceId for tracking
         }),
       });
 

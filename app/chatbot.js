@@ -1,358 +1,504 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 import * as Speech from 'expo-speech';
-import BottomNav from './components/BottomNav';
-import AppHeader from './components/AppHeader';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
+// Replace with your backend IP address from the server startup logs
+const API_BASE_URL = 'http://10.183.248.187:5000/api/chatbot';
 
-export default function ChatbotScreen() {
-  const router = useRouter();
-  const [showLanguageSelection, setShowLanguageSelection] = useState(true);
-  const [messages, setMessages] = useState([]);
+const ChatbotScreen = () => {
+  const [messages, setMessages] = useState([
+    {
+      id: '1',
+      text: 'Hello! I am your government schemes assistant. How can I help you today?',
+      sender: 'bot',
+      timestamp: new Date(),
+      language: 'en'
+    }
+  ]);
   const [inputText, setInputText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [language, setLanguage] = useState(null);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [language, setLanguage] = useState('en');
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const scrollViewRef = useRef(null);
 
   useEffect(() => {
-    if (language && messages.length === 0) {
-      const welcomeMessage = language === 'hi'
-        ? 'नमस्ते! मैं नीति निधि सरकारी ऐप के लिए आपकी सहायक हूं। मैं सरकारी योजनाओं और सेवाओं के बारे में जानकारी प्रदान कर सकती हूं। मैं आपकी कैसे मदद कर सकती हूं?'
-        : 'Hello! I\'m your assistant for Niti Nidhi. I can help you with information about government schemes and services. How can I assist you today?';
-      
-      setMessages([{
-        id: 1,
-        text: welcomeMessage,
-        sender: 'bot',
-      }]);
-      speakText(welcomeMessage);
-    }
+    // Scroll to bottom when new messages arrive
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  }, [messages]);
+
+  useEffect(() => {
+    // Update welcome message when language changes
+    const welcomeMessages = {
+      en: 'Hello! I am your government schemes assistant. How can I help you today?',
+      hi: 'नमस्ते! मैं आपका सरकारी योजना सहायक हूं। आज मैं आपकी कैसे मदद कर सकता हूं?'
+    };
+
+    setMessages([{
+      id: '1',
+      text: welcomeMessages[language],
+      sender: 'bot',
+      timestamp: new Date(),
+      language: language
+    }]);
   }, [language]);
 
-  const selectLanguage = async (selectedLang) => {
-    setLanguage(selectedLang);
-    setShowLanguageSelection(false);
-    await AsyncStorage.setItem('@user_language', selectedLang);
-  };
-
-  const speakText = (text) => {
-    if (voiceEnabled) {
-      Speech.speak(text, {
-        language: language === 'hi' ? 'hi-IN' : 'en-US',
-        pitch: 1.0,
-        rate: 0.9,
-      });
-    }
-  };
-
-  const handleSend = async () => {
-    if (!inputText.trim() || !language) return;
+  const sendMessage = async () => {
+    if (!inputText.trim()) return;
 
     const userMessage = {
-      id: Date.now(),
-      text: inputText,
+      id: Date.now().toString(),
+      text: inputText.trim(),
       sender: 'user',
+      timestamp: new Date(),
+      language: language
     };
 
     setMessages(prev => [...prev, userMessage]);
-    const currentInput = inputText;
     setInputText('');
-    setLoading(true);
+    setIsLoading(true);
 
     try {
-      // Try to get token, but don't require it
-      const token = await AsyncStorage.getItem('@auth_token');
-      
-      const headers = {
-        'Content-Type': 'application/json',
-      };
-      
-      // Add token if available, but don't fail if missing
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      // Prepare conversation history for context
+      const conversationHistory = messages
+        .filter(msg => msg.sender !== 'system')
+        .map(msg => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.text
+        }));
 
-      const response = await fetch(`${API_URL}/chatbot/chat`, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({
-          message: currentInput,
-          language,
-        }),
-      });
+      const response = await axios.post(
+        `${API_BASE_URL}/chat`,
+        {
+          message: userMessage.text,
+          language: language,
+          conversationHistory: conversationHistory
+        },
+        {
+          timeout: 30000,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.success && data.response) {
+      if (response.data.success) {
         const botMessage = {
-          id: Date.now() + 1,
-          text: data.response,
+          id: (Date.now() + 1).toString(),
+          text: response.data.response,
           sender: 'bot',
+          timestamp: new Date(),
+          language: language
         };
 
         setMessages(prev => [...prev, botMessage]);
-        
-        // Speak the bot's response
-        speakText(data.response);
       } else {
-        throw new Error(data.message || 'Failed to get response');
+        throw new Error(response.data.message || 'Failed to get response');
       }
     } catch (error) {
       console.error('Chat error:', error);
-      const errorMessage = {
-        id: Date.now() + 1,
-        text: language === 'hi' 
-          ? `क्षमा करें, कुछ त्रुटि हुई। कृपया बाद में पुनः प्रयास करें।`
-          : `Sorry, an error occurred. Please try again later.`,
-        sender: 'bot',
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      
+      let errorMessage = language === 'hi' 
+        ? 'क्षमा करें, कुछ गलत हो गया। कृपया पुनः प्रयास करें।'
+        : 'Sorry, something went wrong. Please try again.';
+
+      if (error.code === 'ECONNABORTED') {
+        errorMessage = language === 'hi'
+          ? 'कनेक्शन टाइमआउट। कृपया पुनः प्रयास करें।'
+          : 'Connection timeout. Please try again.';
+      } else if (error.response?.status === 429) {
+        errorMessage = language === 'hi'
+          ? 'बहुत सारे अनुरोध। कृपया कुछ देर बाद प्रयास करें।'
+          : 'Too many requests. Please try again later.';
+      } else if (!error.response) {
+        errorMessage = language === 'hi'
+          ? 'सर्वर से कनेक्ट नहीं हो सका। अपना इंटरनेट कनेक्शन जांचें।'
+          : 'Could not connect to server. Check your internet connection.';
+      }
+
+      Alert.alert(
+        language === 'hi' ? 'त्रुटि' : 'Error',
+        errorMessage
+      );
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const toggleLanguage = async () => {
-    const newLang = language === 'en' ? 'hi' : 'en';
-    setLanguage(newLang);
-    await AsyncStorage.setItem('@user_language', newLang);
-  };
-
-  const toggleVoice = () => {
-    setVoiceEnabled(!voiceEnabled);
-    if (voiceEnabled) {
+  const speakText = (text) => {
+    if (isSpeaking) {
       Speech.stop();
+      setIsSpeaking(false);
+      return;
     }
+
+    const languageCode = language === 'hi' ? 'hi-IN' : 'en-US';
+
+    Speech.speak(text, {
+      language: languageCode,
+      pitch: 1.0,
+      rate: 0.9,
+      onStart: () => setIsSpeaking(true),
+      onDone: () => setIsSpeaking(false),
+      onStopped: () => setIsSpeaking(false),
+      onError: () => {
+        setIsSpeaking(false);
+        Alert.alert(
+          language === 'hi' ? 'त्रुटि' : 'Error',
+          language === 'hi' 
+            ? 'ऑडियो चलाने में समस्या हुई।'
+            : 'Failed to play audio.'
+        );
+      }
+    });
+  };
+
+  const toggleLanguage = () => {
+    setLanguage(prev => prev === 'en' ? 'hi' : 'en');
+    Speech.stop();
+    setIsSpeaking(false);
+  };
+
+  const clearChat = () => {
+    Alert.alert(
+      language === 'hi' ? 'चैट साफ़ करें' : 'Clear Chat',
+      language === 'hi' 
+        ? 'क्या आप सभी संदेश हटाना चाहते हैं?'
+        : 'Do you want to delete all messages?',
+      [
+        {
+          text: language === 'hi' ? 'रद्द करें' : 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: language === 'hi' ? 'हटाएं' : 'Delete',
+          onPress: () => {
+            const welcomeMessages = {
+              en: 'Hello! I am your government schemes assistant. How can I help you today?',
+              hi: 'नमस्ते! मैं आपका सरकारी योजना सहायक हूं। आज मैं आपकी कैसे मदद कर सकता हूं?'
+            };
+
+            setMessages([{
+              id: '1',
+              text: welcomeMessages[language],
+              sender: 'bot',
+              timestamp: new Date(),
+              language: language
+            }]);
+            Speech.stop();
+            setIsSpeaking(false);
+          },
+          style: 'destructive'
+        }
+      ]
+    );
+  };
+
+  const formatTime = (date) => {
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
-      
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
       {/* Header */}
-      <AppHeader title="Chatbot" />
-      
-      {/* Language Selection at Top */}
-      {language && (
-        <View style={styles.headerControls}>
-          <TouchableOpacity onPress={toggleLanguage} style={styles.controlButton}>
-            <Text style={styles.controlText}>{language === 'en' ? 'हिं' : 'EN'}</Text>
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Ionicons name="chatbubbles" size={24} color="#fff" />
+          <Text style={styles.headerTitle}>
+            {language === 'hi' ? 'सरकारी योजना सहायक' : 'Scheme Assistant'}
+          </Text>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={toggleLanguage}
+          >
+            <Text style={styles.languageText}>
+              {language === 'en' ? 'अ' : 'A'}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={toggleVoice} style={styles.controlButton}>
-            <Text style={styles.controlIcon}>{voiceEnabled ? '🔊' : '🔇'}</Text>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={clearChat}
+          >
+            <Ionicons name="trash-outline" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
-      )}
+      </View>
 
-      {showLanguageSelection ? (
-        <View style={styles.languageSelectionContainer}>
-          <Text style={styles.languageTitle}>Choose Language / भाषा चुनें</Text>
-          <TouchableOpacity
-            style={styles.languageButton}
-            onPress={() => selectLanguage('en')}
+      {/* Messages */}
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.messagesContainer}
+        contentContainerStyle={styles.messagesContent}
+        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+      >
+        {messages.map((message) => (
+          <View
+            key={message.id}
+            style={[
+              styles.messageWrapper,
+              message.sender === 'user' ? styles.userMessageWrapper : styles.botMessageWrapper
+            ]}
           >
-            <Text style={styles.languageButtonText}>English</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.languageButton}
-            onPress={() => selectLanguage('hi')}
-          >
-            <Text style={styles.languageButtonText}>हिंदी</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.chatContainer}
-          keyboardVerticalOffset={100}
-        >
-          <ScrollView
-            ref={scrollViewRef}
-            style={styles.messagesContainer}
-            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-          >
-            {messages.map((message) => (
-              <View
-                key={message.id}
+            <View
+              style={[
+                styles.messageBubble,
+                message.sender === 'user' ? styles.userMessage : styles.botMessage
+              ]}
+            >
+              <Text
                 style={[
-                  styles.message,
-                  message.sender === 'user' ? styles.userMessage : styles.botMessage,
+                  styles.messageText,
+                  message.sender === 'user' ? styles.userMessageText : styles.botMessageText
                 ]}
               >
-                <Text style={[
-                  styles.messageText,
-                  message.sender === 'user' ? styles.userMessageText : styles.botMessageText,
-                ]}>
-                  {message.text}
-                </Text>
-              </View>
-            ))}
-            {loading && (
-              <View style={[styles.message, styles.botMessage]}>
-                <ActivityIndicator size="small" color="#A78BFA" />
-              </View>
+                {message.text}
+              </Text>
+              <Text
+                style={[
+                  styles.timestamp,
+                  message.sender === 'user' ? styles.userTimestamp : styles.botTimestamp
+                ]}
+              >
+                {formatTime(message.timestamp)}
+              </Text>
+            </View>
+            {message.sender === 'bot' && (
+              <TouchableOpacity
+                style={styles.speakerButton}
+                onPress={() => speakText(message.text)}
+              >
+                <Ionicons
+                  name={isSpeaking ? "volume-high" : "volume-medium-outline"}
+                  size={20}
+                  color="#6366f1"
+                />
+              </TouchableOpacity>
             )}
-          </ScrollView>
-
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder={language === 'hi' ? 'अपना प्रश्न टाइप करें...' : 'Type your question...'}
-              placeholderTextColor="#9CA3AF"
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-              onSubmitEditing={handleSend}
-            />
-            <TouchableOpacity
-              style={[styles.sendButton, (!inputText.trim() || !language || loading) && styles.sendButtonDisabled]}
-              onPress={handleSend}
-              disabled={!inputText.trim() || !language || loading}
-            >
-              <Text style={styles.sendButtonText}>→</Text>
-            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      )}
+        ))}
+        {isLoading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#6366f1" />
+            <Text style={styles.loadingText}>
+              {language === 'hi' ? 'टाइप कर रहा है...' : 'Typing...'}
+            </Text>
+          </View>
+        )}
+      </ScrollView>
 
-      {/* Bottom Navigation */}
-      <BottomNav />
-    </View>
+      {/* Input */}
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          value={inputText}
+          onChangeText={setInputText}
+          placeholder={
+            language === 'hi'
+              ? 'अपना प्रश्न लिखें...'
+              : 'Type your question...'
+          }
+          placeholderTextColor="#9ca3af"
+          multiline
+          maxLength={500}
+          editable={!isLoading}
+        />
+        <TouchableOpacity
+          style={[
+            styles.sendButton,
+            (!inputText.trim() || isLoading) && styles.sendButtonDisabled
+          ]}
+          onPress={sendMessage}
+          disabled={!inputText.trim() || isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name="send" size={20} color="#fff" />
+          )}
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#f9fafb',
   },
-  headerControls: {
+  header: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 12,
-    backgroundColor: '#1F2937',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: Platform.OS === 'ios' ? 50 : 12,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  headerRight: {
+    flexDirection: 'row',
     gap: 12,
   },
-  controlButton: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#374151',
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+  headerButton: {
+    padding: 6,
   },
-  controlText: {
-    color: '#fff',
-    fontSize: 12,
+  languageText: {
+    fontSize: 18,
     fontWeight: 'bold',
-  },
-  controlIcon: {
-    fontSize: 20,
-  },
-  chatContainer: {
-    flex: 1,
+    color: '#fff',
   },
   messagesContainer: {
     flex: 1,
-    padding: 20,
   },
-  message: {
+  messagesContent: {
+    padding: 16,
+    paddingBottom: 8,
+  },
+  messageWrapper: {
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  userMessageWrapper: {
+    justifyContent: 'flex-end',
+  },
+  botMessageWrapper: {
+    justifyContent: 'flex-start',
+  },
+  messageBubble: {
     maxWidth: '80%',
     padding: 12,
     borderRadius: 16,
-    marginBottom: 12,
   },
   userMessage: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#A78BFA',
+    backgroundColor: '#6366f1',
+    borderBottomRightRadius: 4,
   },
   botMessage: {
-    alignSelf: 'flex-start',
     backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderBottomLeftRadius: 4,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   messageText: {
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 20,
   },
   userMessageText: {
     color: '#fff',
   },
   botMessageText: {
-    color: '#1F2937',
+    color: '#1f2937',
+  },
+  timestamp: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  userTimestamp: {
+    color: '#e0e7ff',
+    textAlign: 'right',
+  },
+  botTimestamp: {
+    color: '#9ca3af',
+  },
+  speakerButton: {
+    marginLeft: 8,
+    padding: 8,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 16,
+    maxWidth: '80%',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#6b7280',
   },
   inputContainer: {
     flexDirection: 'row',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
     alignItems: 'flex-end',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   input: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#f3f4f6',
     borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#1F2937',
+    paddingVertical: 10,
+    paddingTop: 10,
+    fontSize: 15,
     maxHeight: 100,
-    marginRight: 12,
+    color: '#1f2937',
   },
   sendButton: {
+    backgroundColor: '#6366f1',
     width: 44,
     height: 44,
-    backgroundColor: '#A78BFA',
     borderRadius: 22,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
   },
   sendButtonDisabled: {
-    backgroundColor: '#D1D5DB',
-  },
-  sendButtonText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  languageSelectionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  languageTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 40,
-    textAlign: 'center',
-  },
-  languageButton: {
-    backgroundColor: '#A78BFA',
-    borderRadius: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 60,
-    marginBottom: 20,
-    width: '80%',
-    alignItems: 'center',
-  },
-  languageButtonText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
+    backgroundColor: '#c7d2fe',
   },
 });
+
+export default ChatbotScreen;

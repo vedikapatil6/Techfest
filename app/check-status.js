@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import BottomNav from './components/BottomNav';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from './components/AppHeader';
+import BottomNav from './components/BottomNav';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -40,38 +40,55 @@ export default function CheckStatusScreen() {
     try {
       const token = await AsyncStorage.getItem('@auth_token');
       
-      if (!token) {
-        setLoading(false);
-        return;
+      // Get or create device ID - always use this for tracking
+      let deviceId = await AsyncStorage.getItem('@device_id');
+      if (!deviceId) {
+        deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await AsyncStorage.setItem('@device_id', deviceId);
       }
 
-      // Load applications
-      const appsResponse = await fetch(`${API_URL}/applications/my-applications`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      console.log('📱 Loading data with deviceId:', deviceId);
 
+      const headers = {
+          'Content-Type': 'application/json',
+      };
+
+      // Add auth token if available
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      // Always use deviceId as query param to ensure we get the right data
+      const appsUrl = `${API_URL}/applications/my-applications?deviceId=${deviceId}`;
+      
+      console.log('📤 Fetching applications from:', appsUrl);
+      const appsResponse = await fetch(appsUrl, { headers });
       const appsData = await appsResponse.json();
+      console.log('📥 Applications response:', appsData);
+      
       if (appsData.success) {
         setApplications(appsData.applications || []);
+        console.log(`✅ Loaded ${appsData.applications?.length || 0} applications`);
+      } else {
+        console.error('❌ Failed to load applications:', appsData.message);
       }
 
-      // Load complaints
-      const complaintsResponse = await fetch(`${API_URL}/complaints/my-complaints`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
+      // Always use deviceId as query param
+      const complaintsUrl = `${API_URL}/complaints/my-complaints?deviceId=${deviceId}`;
+      
+      console.log('📤 Fetching complaints from:', complaintsUrl);
+      const complaintsResponse = await fetch(complaintsUrl, { headers });
       const complaintsData = await complaintsResponse.json();
+      console.log('📥 Complaints response:', complaintsData);
+      
       if (complaintsData.success) {
         setComplaints(complaintsData.complaints || []);
+        console.log(`✅ Loaded ${complaintsData.complaints?.length || 0} complaints`);
+      } else {
+        console.error('❌ Failed to load complaints:', complaintsData.message);
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('❌ Error loading data:', error);
     } finally {
       setLoading(false);
     }

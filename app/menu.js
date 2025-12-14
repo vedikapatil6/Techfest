@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from './components/AppHeader';
 
 const STORAGE_KEYS = {
@@ -65,13 +65,46 @@ export default function MenuScreen() {
     );
   };
 
+  const [theme, setTheme] = useState('light');
+
+  useEffect(() => {
+    loadTheme();
+  }, []);
+
+  const loadTheme = async () => {
+    try {
+      const savedTheme = await AsyncStorage.getItem('@app_theme');
+      if (savedTheme) {
+        setTheme(savedTheme);
+      }
+    } catch (error) {
+      console.error('Error loading theme:', error);
+    }
+  };
+
+  const toggleTheme = async () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    try {
+      await AsyncStorage.setItem('@app_theme', newTheme);
+      Alert.alert(
+        'Theme Changed',
+        `Theme changed to ${newTheme} mode. Please restart the app to see the changes.`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error saving theme:', error);
+    }
+  };
+
   const menuItems = [
     { id: 1, icon: '👤', title: 'View Profile', onPress: () => {} },
     { id: 2, icon: '📋', title: 'My Applications', onPress: () => router.push('/schemes') },
     { id: 3, icon: '📁', title: 'My Documents', onPress: () => router.push('/documents') },
-    { id: 4, icon: '⚙️', title: 'Settings', onPress: () => {} },
-    { id: 5, icon: '❓', title: 'Help & Support', onPress: () => router.push('/helpline') },
-    { id: 6, icon: 'ℹ️', title: 'About', onPress: () => {} },
+    { id: 4, icon: theme === 'light' ? '🌙' : '☀️', title: theme === 'light' ? 'Dark Mode' : 'Light Mode', onPress: toggleTheme },
+    { id: 5, icon: '⚙️', title: 'Settings', onPress: () => {} },
+    { id: 6, icon: '❓', title: 'Help & Support', onPress: () => router.push('/helpline') },
+    { id: 7, icon: 'ℹ️', title: 'About', onPress: () => {} },
   ];
 
   return (

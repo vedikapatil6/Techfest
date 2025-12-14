@@ -1,94 +1,148 @@
 const express = require('express');
 const router = express.Router();
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const jwt = require('jsonwebtoken');
+const axios = require('axios');
 
-// Initialize Gemini AI
-let genAI = null;
-if (process.env.GEMINI_API_KEY) {
-  genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-} else {
-  console.warn('⚠️ GEMINI_API_KEY not configured. Chatbot will use fallback responses.');
-}
-
-// Middleware to verify token (optional for chatbot - allow unauthenticated)
-const verifyToken = (req, res, next) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
+// System prompts for different languages
+const systemPrompts = {
+  en: `You are a helpful AI assistant for Niti Nidhi, a government schemes portal for Indian citizens. Provide accurate information about Indian government schemes, eligibility criteria, application procedures, and benefits. Be concise and helpful.`,
   
-  if (!token) {
-    // Allow chatbot to work without authentication
-    req.userId = null;
-    return next();
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-    req.userId = decoded.userId;
-    next();
-  } catch (error) {
-    // Allow chatbot to work even with invalid/expired token
-    console.log('Chatbot: Invalid token, but allowing access:', error.message);
-    req.userId = null;
-    next();
-  }
+  hi: `आप नीति निधि के लिए एक सहायक हैं, जो भारतीय सरकारी योजनाओं का पोर्टल है। भारतीय सरकारी योजनाओं, पात्रता मानदंड, आवेदन प्रक्रियाओं और लाभों के बारे में सटीक जानकारी प्रदान करें। संक्षिप्त और सहायक रहें।`
 };
 
-// Chat with AI using Gemini
-router.post('/chat', verifyToken, async (req, res) => {
+// Chat endpoint using direct REST API call
+router.post('/chat', async (req, res) => {
   try {
-    const { message, language = 'en' } = req.body;
+    const { message, language = 'en', conversationHistory = [] } = req.body;
 
-    if (!message) {
-      return res.status(400).json({ success: false, message: 'Message is required' });
-    }
-
-    if (!genAI) {
-      const fallbackResponse = language === 'hi'
-        ? 'क्षमा करें, AI सेवा अभी उपलब्ध नहीं है। कृपया GEMINI_API_KEY को कॉन्फ़िगर करें।'
-        : 'Sorry, AI service is not available. Please configure GEMINI_API_KEY.';
-      return res.json({
-        success: true,
-        response: fallbackResponse,
-        language,
+    // Validation
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: language === 'hi' 
+          ? 'संदेश आवश्यक है' 
+          : 'Message is required'
       });
     }
 
-    const systemPrompt = language === 'hi' 
-      ? `आप नीति निधि सरकारी ऐप के लिए एक सहायक हैं। आप सरकारी योजनाओं, सेवाओं और प्रक्रियाओं के बारे में विस्तृत और सटीक जानकारी प्रदान करते हैं। हमेशा हिंदी में उत्तर दें और उपयोगी जानकारी प्रदान करें।`
-      : `You are a helpful assistant for the Niti Nidhi government app. You provide detailed and accurate information about government schemes, services, and procedures. Always answer in English and provide helpful information.`;
+    if (!process.env.GEMINI_API_KEY) {
+      console.error('GEMINI_API_KEY not found');
+      return res.status(500).json({
+        success: false,
+        message: 'API key not configured'
+      });
+    }
 
-    console.log('Calling Gemini API with language:', language);
-    
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-    
-    const prompt = `${systemPrompt}\n\nUser: ${message}\n\nAssistant:`;
-    
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const aiResponse = response.text();
+    console.log(`[Chatbot] Request - Language: ${language}, Message: ${message.substring(0, 50)}...`);
 
-    console.log('Gemini response received:', aiResponse.substring(0, 100));
+    // Build the prompt
+    const systemPrompt = systemPrompts[language] || systemPrompts.en;
+    let fullPrompt = systemPrompt + '\n\n';
+    
+    // Add conversation history
+    if (conversationHistory && conversationHistory.length > 0) {
+      const recent = conversationHistory.slice(-4);
+      recent.forEach(msg => {
+        fullPrompt += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}\n`;
+      });
+    }
+    
+    fullPrompt += `User: ${message}\nAssistant:`;
+
+    // Direct REST API call to Gemini - using gemini-1.5-flash (latest stable model)
+    const modelName = 'gemini-1.5-flash'; // Updated model name
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        contents: [{
+          parts: [{
+            text: fullPrompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        }
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    // Extract the response text
+    const generatedText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!generatedText) {
+      throw new Error('No response generated');
+    }
+
+    console.log('[Chatbot] Response generated successfully');
 
     res.json({
       success: true,
-      response: aiResponse,
-      language,
+      response: generatedText,
+      language: language,
+      timestamp: new Date().toISOString()
     });
-  } catch (error) {
-    console.error('Chatbot error:', error);
-    console.error('Error details:', error.message, error.stack);
-    
-    // More detailed error response
-    const fallbackResponse = req.body.language === 'hi'
-      ? `क्षमा करें, एक त्रुटि हुई: ${error.message}. कृपया बाद में पुनः प्रयास करें या GEMINI_API_KEY जांचें।`
-      : `Sorry, an error occurred: ${error.message}. Please try again later or check GEMINI_API_KEY configuration.`;
 
-    res.json({
-      success: true,
-      response: fallbackResponse,
-      language: req.body.language || 'en',
+  } catch (error) {
+    console.error('[Chatbot] Error:', error.response?.data || error.message);
+    
+    let errorMessage = 'Failed to generate response';
+    let statusCode = 500;
+
+    if (error.response?.status === 400) {
+      errorMessage = language === 'hi' 
+        ? 'अमान्य अनुरोध। कृपया पुनः प्रयास करें।'
+        : 'Invalid request. Please try again.';
+      statusCode = 400;
+    } else if (error.response?.status === 429) {
+      errorMessage = language === 'hi' 
+        ? 'बहुत सारे अनुरोध। कृपया बाद में प्रयास करें।'
+        : 'Too many requests. Please try again later.';
+      statusCode = 429;
+    } else if (error.response?.status === 403 || error.response?.data?.error?.message?.includes('API key')) {
+      errorMessage = language === 'hi' 
+        ? 'API कुंजी अमान्य है।'
+        : 'Invalid API key.';
+      statusCode = 403;
+    } else if (!error.response) {
+      errorMessage = language === 'hi' 
+        ? 'नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।'
+        : 'Network error. Please try again.';
+    }
+
+    res.status(statusCode).json({
+      success: false,
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? (error.response?.data || error.message) : undefined
     });
   }
+});
+
+// Health check endpoint
+router.get('/health', (req, res) => {
+  const isConfigured = !!process.env.GEMINI_API_KEY;
+  res.json({
+    success: true,
+    message: 'Chatbot service is running',
+    apiKeyConfigured: isConfigured,
+    status: isConfigured ? 'ready' : 'not configured',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Get supported languages
+router.get('/languages', (req, res) => {
+  res.json({
+    success: true,
+    languages: [
+      { code: 'en', name: 'English', nativeName: 'English' },
+      { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी' }
+    ]
+  });
 });
 
 module.exports = router;

@@ -87,3 +87,4 @@ console.log('4. Enable Firestore in Firebase Console → Firestore Database');
 console.log('5. Restart app: npm start -- --clear');
 
 
+

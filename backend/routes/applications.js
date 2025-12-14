@@ -1,14 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { getFirestore, FieldValue } = require('../config/firebase');
+const localStorage = require('../storage/localStorage');
 const jwt = require('jsonwebtoken');
 
-// Middleware to verify token
+// Middleware to verify token (optional - allow unauthenticated)
 const verifyToken = (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   
   if (!token) {
-    return res.status(401).json({ success: false, message: 'Authentication required' });
+    // Allow unauthenticated requests
+    req.userId = null;
+    return next();
   }
 
   try {
@@ -16,39 +18,52 @@ const verifyToken = (req, res, next) => {
     req.userId = decoded.userId;
     next();
   } catch (error) {
-    res.status(401).json({ success: false, message: 'Invalid token' });
+    // Allow requests even with invalid token
+    req.userId = null;
+    next();
   }
 };
 
 // Submit Application
 router.post('/submit', verifyToken, async (req, res) => {
   try {
-    const { schemeId, schemeName, formData, documents } = req.body;
+    const { schemeId, schemeName, formData, documents, deviceId } = req.body;
 
-    const db = getFirestore();
-    const applicationsRef = db.collection('schemes');
+    console.log('📥 Received application submission:', { schemeId, schemeName, deviceId, hasToken: !!req.userId });
 
+    // Generate a temporary userId if not authenticated
+    // Use deviceId from client if provided, otherwise generate one
+    const userId = req.userId || deviceId || `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    console.log('👤 Using userId:', userId);
+    
+    const timestamp = new Date().toISOString();
+    
     const applicationData = {
-      userId: req.userId,
+      userId: userId,
       schemeId: schemeId || null,
       schemeName: schemeName || 'Unknown Scheme',
       formData: formData || {},
       documents: documents || [],
       status: 'pending',
-      submittedAt: FieldValue ? FieldValue.serverTimestamp() : new Date(),
-      updatedAt: FieldValue ? FieldValue.serverTimestamp() : new Date(),
+      submittedAt: timestamp,
+      updatedAt: timestamp,
     };
 
-    const docRef = await applicationsRef.add(applicationData);
+    // Save to local storage
+    const result = await localStorage.addApplication(applicationData);
+    const docId = result._id;
+    console.log('✅ Application saved to local storage, userId:', userId, 'docId:', docId);
 
     res.json({
       success: true,
       message: 'Application submitted successfully',
       application: {
-        id: docRef.id,
+        id: docId,
+        userId: userId, // Return userId so client can store it
         schemeName: applicationData.schemeName,
         status: applicationData.status,
-        submittedAt: new Date().toISOString(),
+        submittedAt: timestamp,
       },
     });
   } catch (error) {
@@ -60,22 +75,25 @@ router.post('/submit', verifyToken, async (req, res) => {
 // Get User Applications (Check Status)
 router.get('/my-applications', verifyToken, async (req, res) => {
   try {
-    const db = getFirestore();
-    const applicationsRef = db.collection('schemes');
+    // Get userId from token or query parameter (for unauthenticated users)
+    const userId = req.userId || req.query.deviceId;
     
-    const snapshot = await applicationsRef
-      .where('userId', '==', req.userId)
-      .orderBy('submittedAt', 'desc')
-      .get();
-
-    const applications = [];
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      applications.push({
-        _id: doc.id,
-        ...data,
-        submittedAt: data.submittedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+    if (!userId) {
+      return res.json({
+        success: true,
+        applications: [],
       });
+    }
+
+    // Get from local storage
+    const applications = await localStorage.getApplications(userId);
+    console.log(`✅ Fetched ${applications.length} applications for userId: ${userId}`);
+
+    // Sort by submittedAt descending
+    applications.sort((a, b) => {
+      const dateA = new Date(a.submittedAt || 0);
+      const dateB = new Date(b.submittedAt || 0);
+      return dateB - dateA;
     });
 
     res.json({
@@ -91,26 +109,17 @@ router.get('/my-applications', verifyToken, async (req, res) => {
 // Get Application Details
 router.get('/:id', verifyToken, async (req, res) => {
   try {
-    const db = getFirestore();
-    const applicationRef = db.collection('schemes').doc(req.params.id);
-    const doc = await applicationRef.get();
+    const userId = req.userId || req.query.deviceId;
+    const applications = await localStorage.getApplications(userId);
+    const application = applications.find(app => app._id === req.params.id);
 
-    if (!doc.exists) {
+    if (!application) {
       return res.status(404).json({ success: false, message: 'Application not found' });
-    }
-
-    const data = doc.data();
-    if (data.userId !== req.userId) {
-      return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
     res.json({
       success: true,
-      application: {
-        _id: doc.id,
-        ...data,
-        submittedAt: data.submittedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      },
+      application,
     });
   } catch (error) {
     console.error('Get application error:', error);

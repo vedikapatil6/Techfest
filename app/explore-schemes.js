@@ -1,25 +1,24 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import BottomNav from './components/BottomNav';
+import React, { useState } from 'react';
+import { ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from './components/AppHeader';
+import BottomNav from './components/BottomNav';
 
 const categories = [
-  { id: 1, name: 'Agriculture', icon: '🌾', color: '#E8F5E9' },
-  { id: 2, name: 'Health', icon: '🏥', color: '#F3E5F5' },
-  { id: 3, name: 'Business', icon: '💼', color: '#FFF3E0' },
-  { id: 4, name: 'Education', icon: '🎓', color: '#E3F2FD' },
-  { id: 5, name: 'Women', icon: '👩', color: '#FCE4EC' },
-  { id: 6, name: 'Housing', icon: '🏠', color: '#FFF8E1' },
-  { id: 7, name: 'Sports', icon: '⚽', color: '#E0F2F1' },
-  { id: 8, name: 'Science', icon: '🔬', color: '#F1F8E9' },
-  { id: 9, name: 'Public Safety', icon: '🛡️', color: '#E8EAF6' },
+  { id: 1, name: 'Agriculture', icon: '🌾', color: '#10B981' },
+  { id: 2, name: 'Health', icon: '🏥', color: '#EF4444' },
+  { id: 3, name: 'Business', icon: '💼', color: '#F59E0B' },
+  { id: 4, name: 'Education', icon: '🎓', color: '#3B82F6' },
+  { id: 5, name: 'Women', icon: '👩', color: '#EC4899' },
+  { id: 6, name: 'Housing', icon: '🏠', color: '#8B5CF6' },
+  { id: 7, name: 'Sports', icon: '⚽', color: '#06B6D4' },
+  { id: 8, name: 'Science', icon: '🔬', color: '#84CC16' },
+  { id: 9, name: 'Public Safety', icon: '🛡️', color: '#6366F1' },
 ];
 
 export default function ExploreSchemesScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(null);
 
   const filteredCategories = categories.filter(category =>
     category.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -32,39 +31,25 @@ export default function ExploreSchemesScreen() {
     });
   };
 
-  const handleReset = () => {
-    setSearchQuery('');
-    setSelectedCategory(null);
-  };
-
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       
-      {/* Header */}
-      <AppHeader title="Categories" />
+      <AppHeader title="Explore Schemes" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Sub Header */}
-        <View style={styles.subHeader}>
-          <Text style={styles.subHeaderTitle}>Choose Category</Text>
-          <TouchableOpacity onPress={handleReset}>
-            <Text style={styles.resetText}>Reset</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Search Bar */}
         <View style={styles.searchContainer}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search"
+            placeholder="Search categories..."
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholderTextColor="#9CA3AF"
           />
-          <TouchableOpacity style={styles.filterButton}>
-            <Text style={styles.filterIcon}>🔽</Text>
-          </TouchableOpacity>
+          <View style={styles.searchIcon}>
+            <Text style={styles.searchIconText}>🔍</Text>
+          </View>
         </View>
 
         {/* Categories Grid */}
@@ -72,16 +57,16 @@ export default function ExploreSchemesScreen() {
           {filteredCategories.map((category) => (
             <TouchableOpacity
               key={category.id}
-              style={[
-                styles.categoryCard,
-                selectedCategory === category.id && styles.selectedCategoryCard
-              ]}
+              style={styles.categoryCard}
               onPress={() => handleCategorySelect(category)}
             >
-              <View style={[styles.categoryIconContainer, { backgroundColor: category.color }]}>
+              <View style={[styles.categoryIconContainer, { backgroundColor: category.color + '20' }]}>
                 <Text style={styles.categoryIcon}>{category.icon}</Text>
               </View>
               <Text style={styles.categoryName}>{category.name}</Text>
+              <View style={styles.cardArrow}>
+                <Text style={styles.arrowText}>→</Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>
@@ -89,7 +74,6 @@ export default function ExploreSchemesScreen() {
         <View style={styles.bottomSpacing} />
       </ScrollView>
 
-      {/* Bottom Navigation */}
       <BottomNav />
     </View>
   );
@@ -98,53 +82,37 @@ export default function ExploreSchemesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#fff',
   },
   content: {
     flex: 1,
     paddingHorizontal: 20,
   },
-  subHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 16,
-  },
-  subHeaderTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  resetText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: 16,
     marginBottom: 24,
-    gap: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     fontSize: 16,
     color: '#1F2937',
+    paddingVertical: 4,
   },
-  filterButton: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+  searchIcon: {
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  filterIcon: {
+  searchIconText: {
     fontSize: 20,
   },
   categoriesGrid: {
@@ -154,19 +122,19 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   categoryCard: {
-    width: '30%',
+    width: '48%',
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 12,
     alignItems: 'center',
-    marginBottom: 16,
-    minHeight: 120,
-    justifyContent: 'center',
-  },
-  selectedCategoryCard: {
-    backgroundColor: '#E0E7FF',
-    borderWidth: 2,
-    borderColor: '#6366F1',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   categoryIconContainer: {
     width: 64,
@@ -184,9 +152,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1F2937',
     textAlign: 'center',
+    marginBottom: 12,
+  },
+  cardArrow: {
+    width: 32,
+    height: 32,
+    backgroundColor: '#6366F1',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   bottomSpacing: {
     height: 100,
   },
 });
-

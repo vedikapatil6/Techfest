@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import BottomNav from './components/BottomNav';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from './components/AppHeader';
+import BottomNav from './components/BottomNav';
 
 const SchemeCard = ({ icon, title, description, eligibility, onPress }) => (
   <TouchableOpacity style={styles.schemeCard} onPress={onPress}>
     <View style={styles.cardContent}>
       <View style={styles.iconContainer}>
-        <Text style={styles.schemeIcon}>{icon}</Text>
+        <Text style={styles.schemeIcon}>📋</Text>
       </View>
       <View style={styles.textContainer}>
         <Text style={styles.schemeTitle}>{title}</Text>
@@ -81,12 +81,16 @@ export default function ApplySchemesScreen() {
       case 2:
         return 'All citizens';
       case 3:
-        return 'Economically weaker sections';
+        return 'Below poverty line';
       case 4:
-        return 'Small and marginal farmers';
+        return 'Economically weaker sections';
       case 5:
-        return 'Girl child';
+        return 'Rural residents';
       case 6:
+        return 'Small and marginal farmers';
+      case 7:
+        return 'Girl child';
+      case 8:
         return 'Students below 25 years';
       default:
         return 'Check eligibility';
@@ -109,30 +113,43 @@ export default function ApplySchemesScreen() {
     {
       id: 3,
       icon: '🏥',
-      title: 'Ayushman Bharat– Pradhan Mantri Jan Arogya Yojana',
-      description: 'Public health insurance scheme offering up to ₹5 lakh per family per year for secondary and tertiary care to vulnerable households.',
+      title: 'Ayushman Bharat',
+      description: 'Health insurance for poor families',
     },
     {
       id: 4,
+      icon: '🏥',
+      title: 'Pradhan Mantri Jan Arogya Yojana',
+      description: 'Free health insurance',
+    },
+    {
+      id: 5,
+      icon: '🏥',
+      title: 'National Health Mission',
+      description: 'Healthcare services in rural areas',
+    },
+    {
+      id: 6,
       icon: '🌱',
       title: 'Pradhan Mantri Kisan Samman Nidhi (PM-KISAN)',
       description: 'Income support of ₹6,000 per year in three installments to eligible small and marginal farmers.',
     },
     {
-      id: 5,
+      id: 7,
       icon: '👩',
       title: 'Beti Bachao Beti Padhao',
       description: 'Save and educate the girl child scheme providing financial support for girls\' education and welfare.',
     },
     {
-      id: 6,
+      id: 8,
       icon: '🎓',
       title: 'Scholarship for Higher Education',
       description: 'Financial aid for meritorious students pursuing higher education in recognized institutions.',
     },
   ];
 
-  const eligibleSchemes = schemes.filter(scheme => isEligible(scheme));
+  // Show all schemes, not just eligible ones (as per user request)
+  const eligibleSchemes = schemes;
 
   return (
     <View style={styles.container}>
@@ -185,6 +202,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
+    backgroundColor: '#E5E7EB', // Light grey background for content area
   },
   sectionTitle: {
     fontSize: 24,
@@ -194,30 +212,29 @@ const styles = StyleSheet.create({
   },
   schemeCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20, // More rounded corners
     padding: 16,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 6,
+    elevation: 4, // Subtle shadow
   },
   cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   iconContainer: {
-    width: 56,
-    height: 56,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
   },
   schemeIcon: {
-    fontSize: 28,
+    fontSize: 32,
+    color: '#8B4513', // Brown color for clipboard icon
   },
   textContainer: {
     flex: 1,
@@ -239,6 +256,7 @@ const styles = StyleSheet.create({
   eligibilityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 4,
   },
   eligibilityLabel: {
     fontSize: 14,
@@ -251,12 +269,13 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   applyButton: {
-    backgroundColor: '#A78BFA',
+    backgroundColor: '#C084FC', // Light purple background
     borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     minWidth: 80,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   applyButtonText: {
     color: '#fff',

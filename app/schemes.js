@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import BottomNav from './components/BottomNav';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from './components/AppHeader';
+import BottomNav from './components/BottomNav';
 
 export default function SchemesScreen() {
   const router = useRouter();
@@ -53,17 +53,6 @@ export default function SchemesScreen() {
             <View style={styles.dot} />
           </View>
         </View>
-
-        {/* Check Status Button */}
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => router.push('/check-status')}
-        >
-          <View style={styles.buttonIconContainer}>
-            <Text style={styles.buttonIcon}>✓</Text>
-          </View>
-          <Text style={styles.buttonText}>Check Status</Text>
-        </TouchableOpacity>
 
         {/* Apply Now Button */}
         <TouchableOpacity 

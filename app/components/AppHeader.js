@@ -21,7 +21,6 @@ export default function AppHeader({ title, showBack = true, onBackPress }) {
         </TouchableOpacity>
       )}
       
-      {/* Show Logo/App Name if no title, otherwise show title */}
       {!title ? (
         <View style={styles.logoContainer}>
           <View style={styles.logo}>
@@ -35,13 +34,7 @@ export default function AppHeader({ title, showBack = true, onBackPress }) {
       
       <View style={styles.headerIcons}>
         <TouchableOpacity style={styles.headerIcon}>
-          <Text style={styles.headerIconText}>💬</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.headerIcon, { backgroundColor: '#BFDBFE' }]}>
           <Text style={styles.headerIconText}>🔔</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.headerIcon, { backgroundColor: '#93C5FD' }]}>
-          <Text style={styles.headerIconText}>👤</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -50,7 +43,7 @@ export default function AppHeader({ title, showBack = true, onBackPress }) {
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: '#1F2937',
+    backgroundColor: '#1E293B',
     paddingHorizontal: 20,
     paddingTop: 48,
     paddingBottom: 16,
@@ -58,17 +51,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#374151',
+    borderBottomColor: '#334155',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
-    marginRight: 8,
+    alignItems: 'center',
+    marginRight: 12,
+    borderRadius: 20,
+    backgroundColor: '#0F172A',
   },
   backIcon: {
     color: '#fff',
     fontSize: 24,
+    fontWeight: 'bold',
   },
   logoContainer: {
     flexDirection: 'row',
@@ -76,29 +78,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logo: {
-    width: 36,
-    height: 36,
-    backgroundColor: '#A78BFA',
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    backgroundColor: '#6366F1',
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: 12,
   },
   logoText: {
-    fontSize: 20,
+    fontSize: 22,
   },
   appName: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
   },
   headerTitle: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     flex: 1,
-    marginLeft: 8,
-    marginRight: 8,
   },
   headerIcons: {
     flexDirection: 'row',
@@ -107,13 +107,12 @@ const styles = StyleSheet.create({
   headerIcon: {
     width: 40,
     height: 40,
-    backgroundColor: '#374151',
+    backgroundColor: '#0F172A',
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerIconText: {
-    fontSize: 18,
+    fontSize: 20,
   },
 });
-

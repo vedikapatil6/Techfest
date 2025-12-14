@@ -1,8 +1,8 @@
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import BottomNav from './components/BottomNav';
+import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from './components/AppHeader';
+import BottomNav from './components/BottomNav';
 
 const schemeDetails = {
   1: {

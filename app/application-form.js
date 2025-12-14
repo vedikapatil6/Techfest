@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView, TextInput, Alert } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import BottomNav from './components/BottomNav';
-import AppHeader from './components/AppHeader';
-import { checkRequiredDocuments, getDocumentByType } from './utils/documentChecker';
+import { checkRequiredDocuments } from './utils/documentChecker';
 
 const STORAGE_KEYS = {
   USER_PROFILE: '@user_profile',
@@ -167,41 +166,35 @@ export default function ApplicationFormScreen() {
         documents: submittedDocuments,
       };
 
-      // Save to Firebase Firestore first
-      try {
-        if (auth.currentUser) {
-          await addDoc(collection(db, 'schemes'), {
-            userId: auth.currentUser.uid,
-            schemeId: parseInt(schemeId),
-            schemeName,
-            formData,
-            documents: submittedDocuments,
-            status: 'pending',
-            submittedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-          console.log('✅ Application saved to Firestore');
-        }
-      } catch (firebaseError) {
-        console.log('Firebase save error:', firebaseError);
-      }
-
-      // Also send to backend API
+      // Send to backend API
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
       
-      if (!token) {
-        throw new Error('Not authenticated. Please login again.');
+      // Get or create device ID for unauthenticated users
+      let deviceId = await AsyncStorage.getItem('@device_id');
+      if (!deviceId) {
+        deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await AsyncStorage.setItem('@device_id', deviceId);
       }
+      
+      // Authentication is optional - allow submission without token
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add token if available, but don't require it
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      // Add deviceId to application data
+      applicationData.deviceId = deviceId;
 
       console.log('Submitting application to:', `${API_URL}/applications/submit`);
       console.log('Application data:', JSON.stringify(applicationData, null, 2));
 
       const response = await fetch(`${API_URL}/applications/submit`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         body: JSON.stringify(applicationData),
       });
 
