@@ -8,7 +8,7 @@ import { Alert, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, Touch
 import AppHeader from './components/AppHeader';
 import BottomNav from './components/BottomNav';
 
-const DocumentItem = ({ fileName, timestamp, onPress }) => (
+const DocumentItem = ({ fileName, timestamp, onPress, onDelete }) => (
   <TouchableOpacity style={styles.documentItem} onPress={onPress}>
     <View style={styles.pdfIcon}>
       <Text style={styles.pdfText}>PDF</Text>
@@ -17,6 +17,15 @@ const DocumentItem = ({ fileName, timestamp, onPress }) => (
       <Text style={styles.timestamp}>{timestamp}</Text>
       <Text style={styles.documentName}>{fileName}</Text>
     </View>
+    <TouchableOpacity 
+      style={styles.deleteButton}
+      onPress={(e) => {
+        e.stopPropagation();
+        onDelete();
+      }}
+    >
+      <Text style={styles.deleteIcon}>🗑️</Text>
+    </TouchableOpacity>
   </TouchableOpacity>
 );
 
@@ -204,18 +213,53 @@ export default function DocumentsScreen() {
     }
   };
 
+  const confirmDeleteDocument = (doc) => {
+    Alert.alert(
+      'Delete Document',
+      `Are you sure you want to delete "${doc.name}"?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteDocument(doc.id)
+        }
+      ]
+    );
+  };
+
   const deleteDocument = async (docId) => {
     const doc = documents.find(d => d.id === docId);
-    if (!doc || !doc.uri) return;
+    if (!doc) return;
 
     try {
-      await FileSystem.deleteAsync(doc.uri, { idempotent: true });
+      // Delete the physical file if it exists
+      if (doc.uri) {
+        const fileInfo = await FileSystem.getInfoAsync(doc.uri);
+        if (fileInfo.exists) {
+          await FileSystem.deleteAsync(doc.uri, { idempotent: true });
+          console.log('File deleted:', doc.uri);
+        }
+      }
+      
+      // Remove from state and storage
       const updatedDocs = documents.filter(d => d.id !== docId);
       setDocuments(updatedDocs);
       await saveDocuments(updatedDocs);
+      
+      Alert.alert('Success', 'Document deleted successfully');
     } catch (error) {
       console.log('Error deleting document:', error);
+      Alert.alert('Error', 'Failed to delete document');
     }
+  };
+
+  const navigateToVerifiedDocuments = () => {
+    // Navigate to verified documents screen
+    router.push('/verified-documents');
   };
 
   return (
@@ -226,19 +270,41 @@ export default function DocumentsScreen() {
       <AppHeader title="My Documents" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* My Verified Documents Button */}
+        <TouchableOpacity 
+          style={styles.verifiedButton}
+          onPress={navigateToVerifiedDocuments}
+        >
+          <View style={styles.verifiedButtonContent}>
+            <View style={styles.verifiedIconContainer}>
+              <Text style={styles.verifiedIcon}>✓</Text>
+            </View>
+            <Text style={styles.verifiedButtonText}>My Verified Documents</Text>
+          </View>
+          <Text style={styles.verifiedArrow}>→</Text>
+        </TouchableOpacity>
+
         {/* Documents List */}
         <View style={styles.documentsContainer}>
           <Text style={styles.sectionTitle}>Your Documents</Text>
           
           <View style={styles.documentsList}>
-            {documents.map((doc) => (
-              <DocumentItem
-                key={doc.id}
-                fileName={doc.name}
-                timestamp={doc.timestamp}
-                onPress={() => openDocument(doc)}
-              />
-            ))}
+            {documents.length > 0 ? (
+              documents.map((doc) => (
+                <DocumentItem
+                  key={doc.id}
+                  fileName={doc.name}
+                  timestamp={doc.timestamp}
+                  onPress={() => openDocument(doc)}
+                  onDelete={() => confirmDeleteDocument(doc)}
+                />
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No documents uploaded yet</Text>
+                <Text style={styles.emptyStateSubtext}>Upload your first document to get started</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -345,6 +411,49 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
   },
+  verifiedButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  verifiedButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  verifiedIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  verifiedIcon: {
+    fontSize: 24,
+    color: '#10B981',
+    fontWeight: 'bold',
+  },
+  verifiedButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  verifiedArrow: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
   documentsContainer: {
     backgroundColor: '#E5E7EB',
     borderRadius: 16,
@@ -397,6 +506,28 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
   },
+  deleteButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  deleteIcon: {
+    fontSize: 20,
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
   uploadButton: {
     backgroundColor: '#A78BFA',
     borderRadius: 12,
@@ -436,6 +567,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     flex: 1,
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  headerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E0E7FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerIconText: {
+    fontSize: 16,
   },
   modalBody: {
     padding: 20,

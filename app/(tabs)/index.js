@@ -1,8 +1,10 @@
+// app/index.js (Updated Home Screen)
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import BottomNav from '../components/BottomNav';
+
 
 const MenuCard = ({ icon, title, onPress }) => (
   <TouchableOpacity onPress={onPress} style={styles.menuCard}>
@@ -40,11 +42,12 @@ export default function HomeScreen() {
   const menuItems = [
     { id: 1, icon: '🎯', title: 'My Schemes', route: '/schemes' },
     { id: 2, icon: '📁', title: 'My Documents', route: '/documents' },
-    { id: 3, icon: '🤖', title: 'AI Chatbot', route: '/chatbot' },
-    { id: 4, icon: '📢', title: 'Complaints', route: '/complaints' },
-    { id: 5, icon: '📰', title: 'News & Updates', route: '/news' },
-    { id: 6, icon: '📞', title: 'Helpline', route: '/helpline' },
-    { id: 7, icon: '📋', title: 'Check Status', route: '/check-status' },
+    { id: 3, icon: '💼', title: 'Employment Opportunities', route: '/employment' },
+    { id: 4, icon: '🤖', title: 'AI Chatbot', route: '/chatbot' },
+    { id: 5, icon: '📢', title: 'Complaints', route: '/complaints' },
+    { id: 6, icon: '📰', title: 'News & Updates', route: '/news' },
+    { id: 7, icon: '📞', title: 'Helpline', route: '/helpline' },
+    { id: 8, icon: '📋', title: 'Check Status', route: '/check-status' },
   ];
 
   return (

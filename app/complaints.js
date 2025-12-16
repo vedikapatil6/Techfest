@@ -7,22 +7,25 @@ import { Alert, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpa
 import AppHeader from './components/AppHeader';
 import BottomNav from './components/BottomNav';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_URL = 'https://2ae4b041fab2.ngrok-free.app/api';
 
 const categories = [
-  'Health',
-  'Education',
-  'Infrastructure',
-  'Water Supply',
-  'Electricity',
-  'Sanitation',
-  'Other',
+  { key: 'roads', label: 'Roads' },
+  { key: 'health', label: 'Health' },
+  { key: 'education', label: 'Education' },
+  { key: 'infrastructure', label: 'Infrastructure' },
+  { key: 'water_supply', label: 'Water Supply' },
+  { key: 'electricity', label: 'Electricity' },
+  { key: 'sanitation', label: 'Sanitation' },
+  { key: 'other', label: 'Other' },
 ];
 
 export default function ComplaintsScreen() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [location, setLocation] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -68,7 +71,7 @@ export default function ComplaintsScreen() {
 
     if (!result.canceled && result.assets[0]) {
       setAttachments(prev => [...prev, {
-        type: 'text',
+        type: 'document',
         uri: result.assets[0].uri,
         name: result.assets[0].name,
         mimeType: result.assets[0].mimeType || 'application/pdf',
@@ -86,8 +89,18 @@ export default function ComplaintsScreen() {
       return;
     }
 
+    if (!title.trim()) {
+      Alert.alert('Error', 'Please enter a title');
+      return;
+    }
+
     if (!description.trim()) {
       Alert.alert('Error', 'Please enter a description');
+      return;
+    }
+
+    if (!location.trim()) {
+      Alert.alert('Error', 'Please enter a location');
       return;
     }
 
@@ -97,7 +110,6 @@ export default function ComplaintsScreen() {
       const token = await AsyncStorage.getItem('@auth_token');
       const profileData = await AsyncStorage.getItem('@user_profile');
       const profile = profileData ? JSON.parse(profileData) : {};
-      const userName = profile.fullName || 'User';
 
       // Get or create device ID for tracking
       let deviceId = await AsyncStorage.getItem('@device_id');
@@ -108,25 +120,28 @@ export default function ComplaintsScreen() {
       
       console.log('📱 Submitting complaint with deviceId:', deviceId);
 
-      // Authentication is optional - allow submission without token
       const headers = {
         'Content-Type': 'application/json',
       };
       
-      // Add token if available, but don't require it
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`${API_URL}/complaints/submit`, {
+      const response = await fetch(`${API_URL}/complaints`, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify({
-          category: selectedCategory,
+          title: title.trim(),
           description: description.trim(),
+          category: selectedCategory,
+          location_name: location.trim(),
+          citizen_name: profile.fullName || 'User',
+          citizen_phone: profile.phone || '',
+          citizen_username: profile.username || 'user',
           attachments: attachments,
-          userName,
-          deviceId, // Include deviceId for tracking
+          priority: 'medium',
+          is_urban: true,
         }),
       });
 
@@ -137,15 +152,18 @@ export default function ComplaintsScreen() {
 
       const data = await response.json();
 
-      if (data.success) {
-        Alert.alert(
-          'Success',
-          'Complaint submitted successfully!',
-          [{ text: 'OK', onPress: () => router.push('/check-status') }]
-        );
-      } else {
-        throw new Error(data.message || 'Failed to submit complaint');
-      }
+      Alert.alert(
+        'Success',
+        `Complaint submitted successfully!\nTicket Number: ${data.ticket_number || 'N/A'}`,
+        [{ text: 'OK', onPress: () => router.push('/check-status') }]
+      );
+
+      // Reset form
+      setSelectedCategory(null);
+      setTitle('');
+      setDescription('');
+      setLocation('');
+      setAttachments([]);
     } catch (error) {
       console.error('Submit complaint error:', error);
       Alert.alert('Error', error.message || 'Failed to submit complaint. Please try again.');
@@ -172,32 +190,52 @@ export default function ComplaintsScreen() {
         {/* Raise Complaint Section */}
         <Text style={styles.sectionTitle}>Raise a Complaint</Text>
 
+        {/* Title */}
+        <Text style={styles.label}>Title *</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Enter complaint title..."
+          placeholderTextColor="#9CA3AF"
+          value={title}
+          onChangeText={setTitle}
+        />
+
         {/* Category Selection */}
-        <Text style={styles.label}>Select Category</Text>
+        <Text style={styles.label}>Select Category *</Text>
         <View style={styles.categoriesGrid}>
           {categories.map((category) => (
             <TouchableOpacity
-              key={category}
+              key={category.key}
               style={[
                 styles.categoryButton,
-                selectedCategory === category && styles.categoryButtonSelected,
+                selectedCategory === category.key && styles.categoryButtonSelected,
               ]}
-              onPress={() => setSelectedCategory(category)}
+              onPress={() => setSelectedCategory(category.key)}
             >
               <Text
                 style={[
                   styles.categoryButtonText,
-                  selectedCategory === category && styles.categoryButtonTextSelected,
+                  selectedCategory === category.key && styles.categoryButtonTextSelected,
                 ]}
               >
-                {category}
+                {category.label}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
+        {/* Location */}
+        <Text style={styles.label}>Location *</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Enter location (e.g., Pune City, Sadashiv Peth)..."
+          placeholderTextColor="#9CA3AF"
+          value={location}
+          onChangeText={setLocation}
+        />
+
         {/* Description */}
-        <Text style={styles.label}>Description</Text>
+        <Text style={styles.label}>Description *</Text>
         <TextInput
           style={styles.descriptionInput}
           placeholder="Describe your complaint in detail..."
@@ -292,6 +330,15 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     marginBottom: 12,
     marginTop: 16,
+  },
+  textInput: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#1F2937',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   categoriesGrid: {
     flexDirection: 'row',

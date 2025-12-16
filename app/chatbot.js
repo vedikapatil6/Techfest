@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -15,8 +14,265 @@ import {
     View,
 } from 'react-native';
 
-// Replace with your backend IP address from the server startup logs
-const API_BASE_URL = 'http://10.183.248.187:5000/api/chatbot';
+// Hardcoded demo responses
+const demoResponses = {
+  en: {
+    schemes: {
+      keywords: ['schemes', 'scheme', 'list', 'tell me', 'show', 'available', 'what are'],
+      response: `Here are some popular government schemes:
+
+1. PM-KISAN - Direct income support to farmers
+2. Ayushman Bharat - Health insurance for poor families
+3. Sukanya Samriddhi Yojana - Savings scheme for girl child
+4. PM Awas Yojana - Housing for all
+5. Pradhan Mantri Mudra Yojana - Financial support for small businesses
+
+Would you like to know more about any specific scheme?`
+    },
+    pmkisan: {
+      keywords: ['pm-kisan', 'pm kisan', 'kisan', 'farmer', 'agriculture'],
+      response: `PM-KISAN (Pradhan Mantri Kisan Samman Nidhi)
+
+Eligibility:
+- All landholding farmers
+- Must have valid Aadhaar card
+- Bank account linked to Aadhaar
+
+Benefits:
+- ₹6,000 per year in 3 installments
+- Direct transfer to bank account
+
+How to Apply:
+1. Visit PM-KISAN portal
+2. Register with Aadhaar number
+3. Provide land details
+4. Submit online application
+
+For more details, visit: pmkisan.gov.in`
+    },
+    ayushman: {
+      keywords: ['ayushman', 'health', 'insurance', 'medical', 'hospital'],
+      response: `Ayushman Bharat (PM-JAY)
+
+Eligibility:
+- Bottom 40% of population (SECC data)
+- Annual income below ₹5 lakh
+- No upper age limit
+
+Benefits:
+- Health cover of ₹5 lakh per family/year
+- Cashless treatment at empanelled hospitals
+- Covers 1,400+ medical procedures
+
+How to Apply:
+1. Check eligibility at pmjay.gov.in
+2. Visit nearest Ayushman Mitra
+3. Provide Aadhaar and family details
+4. Get your card instantly`
+    },
+    sukanya: {
+      keywords: ['sukanya', 'girl', 'daughter', 'savings', 'education'],
+      response: `Sukanya Samriddhi Yojana
+
+Eligibility:
+- Girl child below 10 years
+- Parents or legal guardian can open account
+- Maximum 2 accounts per family
+
+Benefits:
+- High interest rate (currently 8.2%)
+- Tax benefits under 80C
+- Maturity after girl turns 21
+
+How to Apply:
+1. Visit any post office or authorized bank
+2. Fill account opening form
+3. Submit girl's birth certificate
+4. Minimum deposit: ₹250`
+    },
+    awas: {
+      keywords: ['awas', 'house', 'housing', 'home', 'construction'],
+      response: `PM Awas Yojana (Housing for All)
+
+Eligibility:
+- EWS/LIG/MIG income groups
+- Should not own pucca house
+- No family member should have availed Central assistance
+
+Benefits:
+- Subsidy on home loan interest
+- Direct financial assistance up to ₹2.5 lakh
+- Affordable housing units
+
+How to Apply:
+1. Visit pmaymis.gov.in
+2. Register with Aadhaar
+3. Fill online application
+4. Submit required documents`
+    },
+    mudra: {
+      keywords: ['mudra', 'loan', 'business', 'startup', 'entrepreneur'],
+      response: `Pradhan Mantri Mudra Yojana
+
+Eligibility:
+- Non-corporate, non-farm enterprises
+- New or existing small businesses
+- No collateral required
+
+Benefits:
+Three categories of loans:
+- Shishu: up to ₹50,000
+- Kishore: ₹50,000 to ₹5 lakh
+- Tarun: ₹5 lakh to ₹10 lakh
+
+How to Apply:
+1. Approach any bank/NBFC/MFI
+2. Submit business plan
+3. Provide KYC documents
+4. Get loan approval`
+    },
+    default: {
+      keywords: [],
+      response: `I can help you with information about government schemes. You can ask me:
+- "Tell me about different schemes"
+- "Explain PM-KISAN"
+- "What is Ayushman Bharat?"
+- "Tell me about Sukanya Samriddhi Yojana"
+- "Explain PM Awas Yojana"
+- "What is Mudra loan?"
+
+How can I assist you?`
+    }
+  },
+  hi: {
+    schemes: {
+      keywords: ['योजना', 'योजनाएं', 'बताओ', 'दिखाओ', 'कौन कौन', 'सरकारी'],
+      response: `यहाँ कुछ लोकप्रिय सरकारी योजनाएं हैं:
+
+1. पीएम-किसान - किसानों के लिए प्रत्यक्ष आय सहायता
+2. आयुष्मान भारत - गरीब परिवारों के लिए स्वास्थ्य बीमा
+3. सुकन्या समृद्धि योजना - बालिकाओं के लिए बचत योजना
+4. पीएम आवास योजना - सभी के लिए आवास
+5. प्रधानमंत्री मुद्रा योजना - छोटे व्यवसायों के लिए वित्तीय सहायता
+
+क्या आप किसी विशेष योजना के बारे में जानना चाहेंगे?`
+    },
+    pmkisan: {
+      keywords: ['किसान', 'पीएम-किसान', 'कृषि', 'खेती'],
+      response: `पीएम-किसान (प्रधानमंत्री किसान सम्मान निधि)
+
+पात्रता:
+- सभी भूमिधारक किसान
+- वैध आधार कार्ड होना चाहिए
+- बैंक खाता आधार से लिंक होना चाहिए
+
+लाभ:
+- प्रति वर्ष ₹6,000 तीन किस्तों में
+- बैंक खाते में सीधा हस्तांतरण
+
+आवेदन कैसे करें:
+1. PM-KISAN पोर्टल पर जाएं
+2. आधार नंबर से रजिस्टर करें
+3. भूमि विवरण प्रदान करें
+4. ऑनलाइन आवेदन जमा करें
+
+अधिक जानकारी के लिए: pmkisan.gov.in`
+    },
+    ayushman: {
+      keywords: ['आयुष्मान', 'स्वास्थ्य', 'बीमा', 'चिकित्सा', 'अस्पताल'],
+      response: `आयुष्मान भारत (PM-JAY)
+
+पात्रता:
+- जनसंख्या का निचला 40% (SECC डेटा)
+- वार्षिक आय ₹5 लाख से कम
+- कोई आयु सीमा नहीं
+
+लाभ:
+- प्रति परिवार/वर्ष ₹5 लाख का स्वास्थ्य कवर
+- सूचीबद्ध अस्पतालों में कैशलेस उपचार
+- 1,400+ चिकित्सा प्रक्रियाएं शामिल
+
+आवेदन कैसे करें:
+1. pmjay.gov.in पर पात्रता जांचें
+2. निकटतम आयुष्मान मित्र से मिलें
+3. आधार और परिवार विवरण दें
+4. तुरंत अपना कार्ड प्राप्त करें`
+    },
+    sukanya: {
+      keywords: ['सुकन्या', 'बेटी', 'बालिका', 'बचत', 'शिक्षा'],
+      response: `सुकन्या समृद्धि योजना
+
+पात्रता:
+- 10 वर्ष से कम उम्र की बालिका
+- माता-पिता या कानूनी अभिभावक खाता खोल सकते हैं
+- प्रति परिवार अधिकतम 2 खाते
+
+लाभ:
+- उच्च ब्याज दर (वर्तमान में 8.2%)
+- 80C के तहत कर लाभ
+- बालिका के 21 वर्ष की होने पर परिपक्वता
+
+आवेदन कैसे करें:
+1. किसी भी डाकघर या अधिकृत बैंक में जाएं
+2. खाता खोलने का फॉर्म भरें
+3. बालिका का जन्म प्रमाण पत्र जमा करें
+4. न्यूनतम जमा: ₹250`
+    },
+    awas: {
+      keywords: ['आवास', 'घर', 'मकान', 'निर्माण'],
+      response: `पीएम आवास योजना (सभी के लिए आवास)
+
+*पात्रता:*
+- EWS/LIG/MIG आय समूह
+- पक्का मकान नहीं होना चाहिए
+- किसी परिवार के सदस्य ने केंद्रीय सहायता का लाभ नहीं उठाया हो
+
+*लाभ:*
+- गृह ऋण ब्याज पर सब्सिडी
+- ₹2.5 लाख तक प्रत्यक्ष वित्तीय सहायता
+- किफायती आवास इकाइयां
+
+*आवेदन कैसे करें:*
+1. pmaymis.gov.in पर जाएं
+2. आधार से रजिस्टर करें
+3. ऑनलाइन आवेदन भरें
+4. आवश्यक दस्तावेज जमा करें`
+    },
+    mudra: {
+      keywords: ['मुद्रा', 'ऋण', 'लोन', 'व्यवसाय', 'बिजनेस'],
+      response: `**प्रधानमंत्री मुद्रा योजना**
+
+*पात्रता:*
+- गैर-कॉर्पोरेट, गैर-कृषि उद्यम
+- नया या मौजूदा छोटा व्यवसाय
+- कोई संपार्श्विक आवश्यक नहीं
+
+*लाभ:*
+ऋण की तीन श्रेणियां:
+- शिशु: ₹50,000 तक
+- किशोर: ₹50,000 से ₹5 लाख
+- तरुण: ₹5 लाख से ₹10 लाख
+
+*आवेदन कैसे करें:*
+1. किसी भी बैंक/NBFC/MFI से संपर्क करें
+2. व्यवसाय योजना प्रस्तुत करें
+3. KYC दस्तावेज़ प्रदान करें
+4. ऋण स्वीकृति प्राप्त करें`
+    },
+    default: {
+      keywords: [],
+      response: `मैं आपको सरकारी योजनाओं के बारे में जानकारी देने में मदद कर सकता हूं। आप मुझसे पूछ सकते हैं:
+- "विभिन्न योजनाओं के बारे में बताओ"
+- "पीएम-किसान समझाओ"
+- "आयुष्मान भारत क्या है?"
+- "सुकन्या समृद्धि योजना के बारे में बताओ"
+- "पीएम आवास योजना समझाओ"
+- "मुद्रा लोन क्या है?"
+
+मैं आपकी कैसे सहायता कर सकता हूं?`
+    }
+  }
+};
 
 const ChatbotScreen = () => {
   const [messages, setMessages] = useState([
@@ -35,12 +291,10 @@ const ChatbotScreen = () => {
   const scrollViewRef = useRef(null);
 
   useEffect(() => {
-    // Scroll to bottom when new messages arrive
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
   useEffect(() => {
-    // Update welcome message when language changes
     const welcomeMessages = {
       en: 'Hello! I am your government schemes assistant. How can I help you today?',
       hi: 'नमस्ते! मैं आपका सरकारी योजना सहायक हूं। आज मैं आपकी कैसे मदद कर सकता हूं?'
@@ -54,6 +308,26 @@ const ChatbotScreen = () => {
       language: language
     }]);
   }, [language]);
+
+  const findBestResponse = (userMessage, lang) => {
+    const msg = userMessage.toLowerCase();
+    const responses = demoResponses[lang];
+
+    // Check each category for keyword matches
+    for (const [key, value] of Object.entries(responses)) {
+      if (key === 'default') continue;
+      
+      const hasMatch = value.keywords.some(keyword => 
+        msg.includes(keyword.toLowerCase())
+      );
+      
+      if (hasMatch) {
+        return value.response;
+      }
+    }
+
+    return responses.default.response;
+  };
 
   const sendMessage = async () => {
     if (!inputText.trim()) return;
@@ -70,71 +344,21 @@ const ChatbotScreen = () => {
     setInputText('');
     setIsLoading(true);
 
-    try {
-      // Prepare conversation history for context
-      const conversationHistory = messages
-        .filter(msg => msg.sender !== 'system')
-        .map(msg => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.text
-        }));
-
-      const response = await axios.post(
-        `${API_BASE_URL}/chat`,
-        {
-          message: userMessage.text,
-          language: language,
-          conversationHistory: conversationHistory
-        },
-        {
-          timeout: 30000,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (response.data.success) {
-        const botMessage = {
-          id: (Date.now() + 1).toString(),
-          text: response.data.response,
-          sender: 'bot',
-          timestamp: new Date(),
-          language: language
-        };
-
-        setMessages(prev => [...prev, botMessage]);
-      } else {
-        throw new Error(response.data.message || 'Failed to get response');
-      }
-    } catch (error) {
-      console.error('Chat error:', error);
+    // Simulate processing delay for realistic demo
+    setTimeout(() => {
+      const botResponse = findBestResponse(userMessage.text, language);
       
-      let errorMessage = language === 'hi' 
-        ? 'क्षमा करें, कुछ गलत हो गया। कृपया पुनः प्रयास करें।'
-        : 'Sorry, something went wrong. Please try again.';
+      const botMessage = {
+        id: (Date.now() + 1).toString(),
+        text: botResponse,
+        sender: 'bot',
+        timestamp: new Date(),
+        language: language
+      };
 
-      if (error.code === 'ECONNABORTED') {
-        errorMessage = language === 'hi'
-          ? 'कनेक्शन टाइमआउट। कृपया पुनः प्रयास करें।'
-          : 'Connection timeout. Please try again.';
-      } else if (error.response?.status === 429) {
-        errorMessage = language === 'hi'
-          ? 'बहुत सारे अनुरोध। कृपया कुछ देर बाद प्रयास करें।'
-          : 'Too many requests. Please try again later.';
-      } else if (!error.response) {
-        errorMessage = language === 'hi'
-          ? 'सर्वर से कनेक्ट नहीं हो सका। अपना इंटरनेट कनेक्शन जांचें।'
-          : 'Could not connect to server. Check your internet connection.';
-      }
-
-      Alert.alert(
-        language === 'hi' ? 'त्रुटि' : 'Error',
-        errorMessage
-      );
-    } finally {
+      setMessages(prev => [...prev, botMessage]);
       setIsLoading(false);
-    }
+    }, 1000);
   };
 
   const speakText = (text) => {

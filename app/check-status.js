@@ -1,28 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from './components/AppHeader';
 import BottomNav from './components/BottomNav';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
+const EXTERNAL_API = 'https://2ae4b041fab2.ngrok-free.app/api';
 
 const statusColors = {
   pending: '#F59E0B',
   under_review: '#3B82F6',
   approved: '#10B981',
   rejected: '#EF4444',
+  resolved: '#10B981',
+  in_progress: '#3B82F6',
   Pending: '#F59E0B',
   'Under Review': '#3B82F6',
+  'In Progress': '#3B82F6',
+  Approved: '#10B981',
   Resolved: '#10B981',
   Rejected: '#EF4444',
 };
 
-const statusLabels = {
-  pending: 'Pending',
-  under_review: 'Under Review',
-  approved: 'Approved',
-  rejected: 'Rejected',
+const priorityColors = {
+  critical: '#DC2626',
+  high: '#F59E0B',
+  medium: '#3B82F6',
+  low: '#10B981',
 };
 
 export default function CheckStatusScreen() {
@@ -30,6 +35,7 @@ export default function CheckStatusScreen() {
   const [applications, setApplications] = useState([]);
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('schemes'); // 'schemes' or 'complaints'
 
   useEffect(() => {
@@ -50,7 +56,7 @@ export default function CheckStatusScreen() {
       console.log('📱 Loading data with deviceId:', deviceId);
 
       const headers = {
-          'Content-Type': 'application/json',
+        'Content-Type': 'application/json',
       };
 
       // Add auth token if available
@@ -58,43 +64,69 @@ export default function CheckStatusScreen() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      // Always use deviceId as query param to ensure we get the right data
+      // Load Schemes Applications
       const appsUrl = `${API_URL}/applications/my-applications?deviceId=${deviceId}`;
-      
       console.log('📤 Fetching applications from:', appsUrl);
-      const appsResponse = await fetch(appsUrl, { headers });
-      const appsData = await appsResponse.json();
-      console.log('📥 Applications response:', appsData);
       
-      if (appsData.success) {
-        setApplications(appsData.applications || []);
-        console.log(`✅ Loaded ${appsData.applications?.length || 0} applications`);
-      } else {
-        console.error('❌ Failed to load applications:', appsData.message);
+      try {
+        const appsResponse = await fetch(appsUrl, { headers });
+        const appsData = await appsResponse.json();
+        console.log('📥 Applications response:', appsData);
+        
+        if (appsData.success) {
+          setApplications(appsData.applications || []);
+          console.log(`✅ Loaded ${appsData.applications?.length || 0} applications`);
+        } else {
+          console.error('❌ Failed to load applications:', appsData.message);
+        }
+      } catch (error) {
+        console.error('❌ Error loading applications:', error);
       }
 
-      // Always use deviceId as query param
-      const complaintsUrl = `${API_URL}/complaints/my-complaints?deviceId=${deviceId}`;
+      // Load Complaints from External API
+      console.log('📤 Fetching complaints from external API');
       
-      console.log('📤 Fetching complaints from:', complaintsUrl);
-      const complaintsResponse = await fetch(complaintsUrl, { headers });
-      const complaintsData = await complaintsResponse.json();
-      console.log('📥 Complaints response:', complaintsData);
-      
-      if (complaintsData.success) {
-        setComplaints(complaintsData.complaints || []);
-        console.log(`✅ Loaded ${complaintsData.complaints?.length || 0} complaints`);
-      } else {
-        console.error('❌ Failed to load complaints:', complaintsData.message);
+      try {
+        const complaintsResponse = await fetch(`${EXTERNAL_API}/complaints`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (complaintsResponse.ok) {
+          const complaintsData = await complaintsResponse.json();
+          console.log('📥 Complaints response:', complaintsData);
+          
+          // Sort by created_at descending
+          const sortedComplaints = (complaintsData || []).sort((a, b) => {
+            const dateA = new Date(a.created_at || 0);
+            const dateB = new Date(b.created_at || 0);
+            return dateB - dateA;
+          });
+          
+          setComplaints(sortedComplaints);
+          console.log(`✅ Loaded ${sortedComplaints.length} complaints`);
+        } else {
+          console.error('❌ Failed to load complaints:', complaintsResponse.status);
+        }
+      } catch (error) {
+        console.error('❌ Error loading complaints:', error);
       }
     } catch (error) {
       console.error('❌ Error loading data:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
+
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', {
       day: 'numeric',
@@ -103,19 +135,37 @@ export default function CheckStatusScreen() {
     });
   };
 
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
       
-      {/* Header */}
       <AppHeader title="Check Status" />
 
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#A78BFA" />
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       ) : (
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.content} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#A78BFA']} />
+          }
+        >
           {/* Tabs */}
           <View style={styles.tabsContainer}>
             <TouchableOpacity
@@ -159,9 +209,12 @@ export default function CheckStatusScreen() {
                       key={app._id}
                       style={styles.applicationCard}
                       onPress={() => {
+                        console.log('Navigating to application details:', app._id);
                         router.push({
                           pathname: '/application-details',
-                          params: { applicationId: app._id }
+                          params: { 
+                            applicationId: app._id || app.applicationId
+                          }
                         });
                       }}
                     >
@@ -172,8 +225,8 @@ export default function CheckStatusScreen() {
                             Submitted on {formatDate(app.submittedAt)}
                           </Text>
                         </View>
-                        <View style={[styles.statusBadge, { backgroundColor: statusColors[app.status] || statusColors.pending }]}>
-                          <Text style={styles.statusText}>{statusLabels[app.status] || 'Pending'}</Text>
+                        <View style={[styles.statusBadge, { backgroundColor: statusColors[app.status] || statusColors.Pending }]}>
+                          <Text style={styles.statusText}>{app.status || 'Pending'}</Text>
                         </View>
                       </View>
                       
@@ -213,33 +266,75 @@ export default function CheckStatusScreen() {
                 <>
                   <Text style={styles.sectionTitle}>Your Complaints</Text>
                   {complaints.map((complaint) => (
-                    <TouchableOpacity
-                      key={complaint._id}
-                      style={styles.applicationCard}
+                    <View
+                      key={complaint.id}
+                      style={styles.complaintCard}
                     >
+                      {/* Header with Ticket Number and Status */}
                       <View style={styles.cardHeader}>
-                        <View style={styles.schemeInfo}>
-                          <Text style={styles.schemeName}>{complaint.category}</Text>
-                          <Text style={styles.submittedDate}>
-                            Submitted on {formatDate(complaint.createdAt)}
+                        <View style={styles.ticketInfo}>
+                          <Text style={styles.ticketNumber}>#{complaint.ticket_number}</Text>
+                          {complaint.priority && (
+                            <View style={[styles.priorityBadge, { backgroundColor: priorityColors[complaint.priority] || priorityColors.medium }]}>
+                              <Text style={styles.priorityText}>
+                                {complaint.priority?.toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: statusColors[complaint.status] || statusColors.pending }]}>
+                          <Text style={styles.statusText}>
+                            {complaint.status?.toUpperCase() || 'PENDING'}
                           </Text>
                         </View>
-                        <View style={[styles.statusBadge, { backgroundColor: statusColors[complaint.status] || statusColors.Pending }]}>
-                          <Text style={styles.statusText}>{complaint.status || 'Pending'}</Text>
+                      </View>
+
+                      {/* Title */}
+                      <Text style={styles.complaintTitle}>{complaint.title}</Text>
+
+                      {/* Category Badge */}
+                      <View style={styles.categoryContainer}>
+                        <View style={styles.categoryBadge}>
+                          <Text style={styles.categoryText}>
+                            {complaint.category?.toUpperCase() || 'N/A'}
+                          </Text>
                         </View>
                       </View>
-                      
+
+                      {/* Location */}
+                      {complaint.location_name && (
+                        <View style={styles.infoRow}>
+                          <Text style={styles.locationIcon}>📍</Text>
+                          <Text style={styles.locationText}>{complaint.location_name}</Text>
+                        </View>
+                      )}
+
+                      {/* Description */}
                       <Text style={styles.descriptionText} numberOfLines={3}>
                         {complaint.description}
                       </Text>
-                      
-                      {complaint.remarks && (
-                        <View style={styles.remarksContainer}>
-                          <Text style={styles.remarksLabel}>Remarks:</Text>
-                          <Text style={styles.remarksText}>{complaint.remarks}</Text>
+
+                      {/* Dates */}
+                      <View style={styles.dateContainer}>
+                        <Text style={styles.dateText}>
+                          Created: {formatDateTime(complaint.created_at)}
+                        </Text>
+                        {complaint.resolved_at && (
+                          <Text style={styles.dateText}>
+                            Resolved: {formatDateTime(complaint.resolved_at)}
+                          </Text>
+                        )}
+                      </View>
+
+                      {/* Attachments Count */}
+                      {complaint.attachments && complaint.attachments.length > 0 && (
+                        <View style={styles.attachmentInfo}>
+                          <Text style={styles.attachmentText}>
+                            📎 {complaint.attachments.length} attachment(s)
+                          </Text>
                         </View>
                       )}
-                    </TouchableOpacity>
+                    </View>
                   ))}
                 </>
               )}
@@ -250,7 +345,6 @@ export default function CheckStatusScreen() {
         </ScrollView>
       )}
 
-      {/* Bottom Navigation */}
       <BottomNav />
     </View>
   );
@@ -270,6 +364,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6B7280',
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -278,6 +377,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   applicationCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  complaintCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 20,
@@ -298,11 +408,40 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  ticketInfo: {
+    flex: 1,
+    marginRight: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ticketNumber: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#6B7280',
+    fontFamily: 'monospace',
+  },
+  priorityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  priorityText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
   schemeName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
     marginBottom: 4,
+  },
+  complaintTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 12,
   },
   submittedDate: {
     fontSize: 14,
@@ -315,8 +454,63 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
+  },
+  categoryContainer: {
+    marginBottom: 12,
+  },
+  categoryBadge: {
+    backgroundColor: '#E0E7FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  categoryText: {
+    color: '#4338CA',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  locationIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  locationText: {
+    fontSize: 14,
+    color: '#1F2937',
+    flex: 1,
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  dateContainer: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  attachmentInfo: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  attachmentText: {
+    fontSize: 12,
+    color: '#6B7280',
   },
   remarksContainer: {
     marginTop: 12,
@@ -404,12 +598,4 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#fff',
   },
-  descriptionText: {
-    fontSize: 14,
-    color: '#1F2937',
-    marginTop: 8,
-    lineHeight: 20,
-  },
 });
-
-

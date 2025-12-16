@@ -8,7 +8,6 @@ const verifyToken = (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   
   if (!token) {
-    // Allow unauthenticated requests
     req.userId = null;
     return next();
   }
@@ -18,64 +17,97 @@ const verifyToken = (req, res, next) => {
     req.userId = decoded.userId;
     next();
   } catch (error) {
-    // Allow requests even with invalid token
     req.userId = null;
     next();
   }
 };
 
-// Submit Application
+// Test endpoint
+router.get('/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Applications route is working! ✅',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Submit application
 router.post('/submit', verifyToken, async (req, res) => {
   try {
     const { schemeId, schemeName, formData, documents, deviceId } = req.body;
 
-    console.log('📥 Received application submission:', { schemeId, schemeName, deviceId, hasToken: !!req.userId });
+    console.log('📥 Received application submission:', { 
+      schemeId, 
+      schemeName, 
+      deviceId,
+      hasFormData: !!formData,
+      documentsCount: documents?.length || 0
+    });
 
-    // Generate a temporary userId if not authenticated
-    // Use deviceId from client if provided, otherwise generate one
+    // Validation
+    if (!schemeId || !schemeName) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Scheme ID and name are required' 
+      });
+    }
+
+    if (!formData) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Form data is required' 
+      });
+    }
+
+    // Generate userId if not authenticated
     const userId = req.userId || deviceId || `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     console.log('👤 Using userId:', userId);
     
     const timestamp = new Date().toISOString();
+    const applicationId = `APP${Date.now()}${Math.floor(Math.random() * 1000)}`;
     
     const applicationData = {
-      userId: userId,
-      schemeId: schemeId || null,
-      schemeName: schemeName || 'Unknown Scheme',
-      formData: formData || {},
+      applicationId,
+      userId,
+      userName: formData.fullName || 'User',
+      schemeId: parseInt(schemeId),
+      schemeName,
+      formData,
       documents: documents || [],
-      status: 'pending',
+      status: 'Pending',
       submittedAt: timestamp,
       updatedAt: timestamp,
     };
 
     // Save to local storage
-    const result = await localStorage.addApplication(applicationData);
-    const docId = result._id;
-    console.log('✅ Application saved to local storage, userId:', userId, 'docId:', docId);
+    await localStorage.addApplication(applicationData);
+    console.log('✅ Application saved to local storage, applicationId:', applicationId);
 
     res.json({
       success: true,
       message: 'Application submitted successfully',
       application: {
-        id: docId,
-        userId: userId, // Return userId so client can store it
+        id: applicationId,
+        userId,
+        schemeId: applicationData.schemeId,
         schemeName: applicationData.schemeName,
-        status: applicationData.status,
+        status: 'Pending',
         submittedAt: timestamp,
       },
     });
   } catch (error) {
-    console.error('Submit application error:', error);
-    res.status(500).json({ success: false, message: 'Failed to submit application' });
+    console.error('❌ Submit application error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to submit application' 
+    });
   }
 });
 
-// Get User Applications (Check Status)
+// Get user's applications
 router.get('/my-applications', verifyToken, async (req, res) => {
   try {
-    // Get userId from token or query parameter (for unauthenticated users)
     const userId = req.userId || req.query.deviceId;
     
     if (!userId) {
@@ -85,7 +117,6 @@ router.get('/my-applications', verifyToken, async (req, res) => {
       });
     }
 
-    // Get from local storage
     const applications = await localStorage.getApplications(userId);
     console.log(`✅ Fetched ${applications.length} applications for userId: ${userId}`);
 
@@ -101,20 +132,25 @@ router.get('/my-applications', verifyToken, async (req, res) => {
       applications,
     });
   } catch (error) {
-    console.error('Get applications error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch applications' });
+    console.error('❌ Get applications error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch applications' 
+    });
   }
 });
 
-// Get Application Details
+// Get application by ID
 router.get('/:id', verifyToken, async (req, res) => {
   try {
-    const userId = req.userId || req.query.deviceId;
-    const applications = await localStorage.getApplications(userId);
-    const application = applications.find(app => app._id === req.params.id);
+    const applicationId = req.params.id;
+    const application = await localStorage.getApplicationById(applicationId);
 
     if (!application) {
-      return res.status(404).json({ success: false, message: 'Application not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
     }
 
     res.json({
@@ -122,8 +158,78 @@ router.get('/:id', verifyToken, async (req, res) => {
       application,
     });
   } catch (error) {
-    console.error('Get application error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch application' });
+    console.error('❌ Get application error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch application' 
+    });
+  }
+});
+
+// Get all applications (Admin)
+router.get('/admin/all', verifyToken, async (req, res) => {
+  try {
+    const applications = await localStorage.getApplications(null); // Get all
+
+    res.json({
+      success: true,
+      applications,
+      count: applications.length,
+    });
+  } catch (error) {
+    console.error('❌ Get all applications error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch applications' 
+    });
+  }
+});
+
+// Update application status (Admin)
+router.patch('/:id/status', verifyToken, async (req, res) => {
+  try {
+    const { status, remarks } = req.body;
+    const applicationId = req.params.id;
+
+    const validStatuses = ['Pending', 'Under Review', 'Approved', 'Rejected'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status'
+      });
+    }
+
+    const application = await localStorage.getApplicationById(applicationId);
+
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
+    }
+
+    const updateData = {
+      status,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (remarks) {
+      updateData.remarks = remarks;
+    }
+
+    const updatedApplication = await localStorage.updateApplication(applicationId, updateData);
+
+    res.json({
+      success: true,
+      message: 'Application status updated',
+      application: updatedApplication,
+    });
+  } catch (error) {
+    console.error('❌ Update application error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to update application' 
+    });
   }
 });
 
