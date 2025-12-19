@@ -222,17 +222,17 @@ How can I assist you?`
       keywords: ['आवास', 'घर', 'मकान', 'निर्माण'],
       response: `पीएम आवास योजना (सभी के लिए आवास)
 
-*पात्रता:*
+पात्रता:
 - EWS/LIG/MIG आय समूह
 - पक्का मकान नहीं होना चाहिए
 - किसी परिवार के सदस्य ने केंद्रीय सहायता का लाभ नहीं उठाया हो
 
-*लाभ:*
+लाभ:
 - गृह ऋण ब्याज पर सब्सिडी
 - ₹2.5 लाख तक प्रत्यक्ष वित्तीय सहायता
 - किफायती आवास इकाइयां
 
-*आवेदन कैसे करें:*
+आवेदन कैसे करें:
 1. pmaymis.gov.in पर जाएं
 2. आधार से रजिस्टर करें
 3. ऑनलाइन आवेदन भरें
@@ -240,20 +240,20 @@ How can I assist you?`
     },
     mudra: {
       keywords: ['मुद्रा', 'ऋण', 'लोन', 'व्यवसाय', 'बिजनेस'],
-      response: `**प्रधानमंत्री मुद्रा योजना**
+      response: `प्रधानमंत्री मुद्रा योजना
 
-*पात्रता:*
+पात्रता:
 - गैर-कॉर्पोरेट, गैर-कृषि उद्यम
 - नया या मौजूदा छोटा व्यवसाय
 - कोई संपार्श्विक आवश्यक नहीं
 
-*लाभ:*
+लाभ:
 ऋण की तीन श्रेणियां:
 - शिशु: ₹50,000 तक
 - किशोर: ₹50,000 से ₹5 लाख
 - तरुण: ₹5 लाख से ₹10 लाख
 
-*आवेदन कैसे करें:*
+आवेदन कैसे करें:
 1. किसी भी बैंक/NBFC/MFI से संपर्क करें
 2. व्यवसाय योजना प्रस्तुत करें
 3. KYC दस्तावेज़ प्रदान करें
@@ -274,7 +274,7 @@ How can I assist you?`
   }
 };
 
-const ChatbotScreen = () => {
+const ChatbotScreen = ({ onBack }) => {
   const [messages, setMessages] = useState([
     {
       id: '1',
@@ -438,14 +438,16 @@ const ChatbotScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onBack}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
           <Ionicons name="chatbubbles" size={24} color="#fff" />
           <Text style={styles.headerTitle}>
             {language === 'hi' ? 'सरकारी योजना सहायक' : 'Scheme Assistant'}
@@ -469,100 +471,106 @@ const ChatbotScreen = () => {
         </View>
       </View>
 
-      {/* Messages */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+      {/* Messages Area with Keyboard Avoiding */}
+      <KeyboardAvoidingView
+        style={styles.contentContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        {messages.map((message) => (
-          <View
-            key={message.id}
-            style={[
-              styles.messageWrapper,
-              message.sender === 'user' ? styles.userMessageWrapper : styles.botMessageWrapper
-            ]}
-          >
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+        >
+          {messages.map((message) => (
             <View
+              key={message.id}
               style={[
-                styles.messageBubble,
-                message.sender === 'user' ? styles.userMessage : styles.botMessage
+                styles.messageWrapper,
+                message.sender === 'user' ? styles.userMessageWrapper : styles.botMessageWrapper
               ]}
             >
-              <Text
+              <View
                 style={[
-                  styles.messageText,
-                  message.sender === 'user' ? styles.userMessageText : styles.botMessageText
+                  styles.messageBubble,
+                  message.sender === 'user' ? styles.userMessage : styles.botMessage
                 ]}
               >
-                {message.text}
-              </Text>
-              <Text
-                style={[
-                  styles.timestamp,
-                  message.sender === 'user' ? styles.userTimestamp : styles.botTimestamp
-                ]}
-              >
-                {formatTime(message.timestamp)}
+                <Text
+                  style={[
+                    styles.messageText,
+                    message.sender === 'user' ? styles.userMessageText : styles.botMessageText
+                  ]}
+                >
+                  {message.text}
+                </Text>
+                <Text
+                  style={[
+                    styles.timestamp,
+                    message.sender === 'user' ? styles.userTimestamp : styles.botTimestamp
+                  ]}
+                >
+                  {formatTime(message.timestamp)}
+                </Text>
+              </View>
+              {message.sender === 'bot' && (
+                <TouchableOpacity
+                  style={styles.speakerButton}
+                  onPress={() => speakText(message.text)}
+                >
+                  <Ionicons
+                    name={isSpeaking ? "volume-high" : "volume-medium-outline"}
+                    size={20}
+                    color="#6366f1"
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          ))}
+          {isLoading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#6366f1" />
+              <Text style={styles.loadingText}>
+                {language === 'hi' ? 'टाइप कर रहा है...' : 'Typing...'}
               </Text>
             </View>
-            {message.sender === 'bot' && (
-              <TouchableOpacity
-                style={styles.speakerButton}
-                onPress={() => speakText(message.text)}
-              >
-                <Ionicons
-                  name={isSpeaking ? "volume-high" : "volume-medium-outline"}
-                  size={20}
-                  color="#6366f1"
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-        ))}
-        {isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#6366f1" />
-            <Text style={styles.loadingText}>
-              {language === 'hi' ? 'टाइप कर रहा है...' : 'Typing...'}
-            </Text>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Input */}
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder={
-            language === 'hi'
-              ? 'अपना प्रश्न लिखें...'
-              : 'Type your question...'
-          }
-          placeholderTextColor="#9ca3af"
-          multiline
-          maxLength={500}
-          editable={!isLoading}
-        />
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            (!inputText.trim() || isLoading) && styles.sendButtonDisabled
-          ]}
-          onPress={sendMessage}
-          disabled={!inputText.trim() || isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Ionicons name="send" size={20} color="#fff" />
           )}
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+        </ScrollView>
+
+        {/* Input */}
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder={
+              language === 'hi'
+                ? 'अपना प्रश्न लिखें...'
+                : 'Type your question...'
+            }
+            placeholderTextColor="#9ca3af"
+            multiline
+            maxLength={500}
+            editable={!isLoading}
+          />
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              (!inputText.trim() || isLoading) && styles.sendButtonDisabled
+            ]}
+            onPress={sendMessage}
+            disabled={!inputText.trim() || isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="send" size={20} color="#fff" />
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -589,6 +597,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
+  },
+  backButton: {
+    padding: 4,
+    marginRight: 4,
   },
   headerTitle: {
     fontSize: 18,
@@ -606,6 +619,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  contentContainer: {
+    flex: 1,
   },
   messagesContainer: {
     flex: 1,
@@ -692,6 +708,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingBottom: 16,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
     elevation: 8,
